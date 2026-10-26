@@ -1,0 +1,46 @@
+!Command: show running-config
+!Running configuration last done at: Sat Oct 24 10:00:00 2026
+! FAKE SAMPLE CONFIG FOR TESTING CONFIGSENTRY - NOT FROM A REAL DEVICE
+version 10.3(4a) Bios:version 05.47
+hostname LAB-N9K-02
+feature tacacs+
+feature nxapi
+feature ospf
+feature password encryption aes
+
+username netadmin password 5 $5$FAKEFAKE$FAKEFAKEFAKEFAKEFAKEFAKE role network-admin
+ssh key rsa 2048
+tacacs-server host 198.51.100.40 key 6 "FAKEAESKEY"
+aaa group server tacacs+ TACACS
+aaa authentication login default group TACACS
+nxapi https port 443
+banner motd #Authorised access only. All activity is monitored and logged.#
+
+ip access-list SNMP-ACL
+  10 permit udp 198.51.100.50/32 any eq snmp
+ip access-list MGMT-ACL
+  10 permit ip 198.51.100.0/24 any
+
+snmp-server user nmsuser network-operator auth sha FAKE priv aes-128 FAKE
+snmp-server community R3adOnly group network-operator
+snmp-server community R3adOnly use-ipv4acl SNMP-ACL
+logging server 198.51.100.20 6 use-vrf management
+ntp server 198.51.100.123 use-vrf management
+spanning-tree port type edge bpduguard default
+
+interface Ethernet1/1
+  description SERVER-01
+  switchport
+  switchport access vlan 10
+  spanning-tree port type edge
+  no shutdown
+
+router ospf UNDERLAY
+  router-id 198.51.100.1
+  area 0.0.0.0 authentication message-digest
+
+line console
+  exec-timeout 10
+line vty
+  exec-timeout 10
+  access-class MGMT-ACL in

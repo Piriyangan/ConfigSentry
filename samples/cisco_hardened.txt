@@ -1,0 +1,79 @@
+Building configuration...
+
+Current configuration : 5210 bytes
+!
+! FAKE SAMPLE CONFIG FOR TESTING CONFIGSENTRY - NOT FROM A REAL DEVICE
+!
+version 17.9
+service timestamps debug datetime msec localtime show-timezone
+service timestamps log datetime msec localtime show-timezone
+service password-encryption
+service tcp-keepalives-in
+!
+hostname LAB-CORE-RTR01
+!
+enable secret 9 $9$FAKEFAKEFAKEFAKE$FAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKE
+!
+username netadmin privilege 15 secret 9 $9$FAKEFAKEFAKEFAKE$FAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKE
+aaa new-model
+aaa authentication login default group tacacs+ local
+aaa authorization exec default group tacacs+ local
+aaa accounting exec default start-stop group tacacs+
+!
+no ip source-route
+ip domain name lab.example
+no ip http server
+ip http secure-server
+ip ssh version 2
+login block-for 120 attempts 5 within 60
+login on-failure log
+no cdp run
+!
+ip dhcp snooping vlan 10
+ip dhcp snooping
+spanning-tree mode rapid-pvst
+spanning-tree portfast edge bpduguard default
+!
+interface GigabitEthernet1/0/1
+ description USER-PORT
+ switchport access vlan 10
+ switchport mode access
+ spanning-tree portfast
+!
+interface GigabitEthernet1/0/48
+ description UPLINK
+ switchport mode trunk
+ ip dhcp snooping trust
+!
+interface Vlan10
+ ip address 198.51.100.1 255.255.255.0
+ ip ospf authentication message-digest
+ ip ospf message-digest-key 1 md5 7 FAKEKEY
+!
+router ospf 1
+ router-id 198.51.100.1
+ area 0 authentication message-digest
+!
+ip access-list standard MGMT-ACL
+ permit 203.0.113.0 0.0.0.255
+ deny any log
+ip access-list standard SNMP-ACL
+ permit 203.0.113.50
+!
+snmp-server group SNMPV3-GROUP v3 priv access SNMP-ACL
+logging host 203.0.113.20
+logging trap informational
+ntp server 203.0.113.123
+!
+banner login ^C
+Authorised access only. All activity is monitored and logged.
+^C
+!
+line con 0
+ exec-timeout 10 0
+line vty 0 15
+ access-class MGMT-ACL in
+ exec-timeout 10 0
+ transport input ssh
+!
+end

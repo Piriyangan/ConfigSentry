@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ConfigSentry</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-in">
+    <a class="logo" href="#/" aria-label="ConfigSentry home">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3 5 7v8c0 7 4.7 12.2 11 14 6.3-1.8 11-7 11-14V7L16 3Z" fill="#2563EB"/><path d="m11 16.2 3.4 3.4 6.8-7.2" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>ConfigSentry</span>
+    </a>
+    <nav aria-label="Main">
+      <a href="#/" data-nav="audit">Audit</a>
+      <a href="#/rules" data-nav="rules">Rules</a>
+      <a href="#/privacy" data-nav="privacy">Privacy</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <!-- ============================ AUDIT ============================ -->
+  <section id="page-audit" class="page">
+    <div class="hero">
+      <h1>Find the weak spots in your network configurations.</h1>
+      <p>Drop in a switch, router or firewall configuration. ConfigSentry shows each risky setting, the line it is on, and the commands that fix it.</p>
+      <ul class="facts" id="facts"></ul>
+    </div>
+
+    <div class="bench">
+      <div class="bench-sec">
+        <h2 class="bench-h">Configuration</h2>
+        <label class="drop" id="drop" tabindex="0">
+          <input type="file" id="file" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4m0 0L7.5 8.5M12 4l4.5 4.5M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="drop-t">Drop a configuration file here, or <u>browse</u></span>
+          <span class="drop-s">Text exports, XML, .tar, .tgz and .zip backups. Up to 25 MB.</span>
+        </label>
+        <div class="filechip" id="filechip" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Zm0 0v5h5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+          <div><b id="fname"></b><small id="fsize"></small></div>
+          <button type="button" class="link" id="fclear">Remove</button>
+        </div>
+        <button type="button" class="link paste-toggle" id="pasteToggle" aria-expanded="false">Paste text instead</button>
+        <textarea id="paste" hidden spellcheck="false" placeholder="Paste the configuration here"></textarea>
+      </div>
+
+      <div class="bench-sec">
+        <h2 class="bench-h">Platform</h2>
+        <div class="tiles" id="tiles" role="radiogroup" aria-label="Platform"></div>
+      </div>
+
+      <div class="bench-foot">
+        <div class="notice" id="notice" hidden></div>
+        <div class="run-row">
+          <button type="button" class="btn primary" id="run" disabled>Run audit</button>
+          <span class="run-hint" id="runHint">Add a configuration to start.</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="results" hidden></div>
+  </section>
+
+  <!-- ============================ RULES ============================ -->
+  <section id="page-rules" class="page" hidden>
+    <div class="hero small">
+      <h1>Rules</h1>
+      <p id="rulesIntro">Every check ConfigSentry runs, by platform.</p>
+    </div>
+    <div class="rules-bar">
+      <input type="search" id="ruleSearch" placeholder="Search rules, for example telnet or SNMP" aria-label="Search rules">
+      <div class="chips" id="ruleChips"></div>
+    </div>
+    <div id="rulesList"></div>
+  </section>
+
+  <!-- ============================ PRIVACY ============================ -->
+  <section id="page-privacy" class="page" hidden>
+    <div class="hero small">
+      <h1>Privacy</h1>
+      <p>Network configurations are sensitive. ConfigSentry is built so they never leave your computer.</p>
+    </div>
+    <div class="prose">
+      <h3>It runs on this computer</h3>
+      <p>The app is a small local web server that only accepts connections from this computer (localhost). Nothing is sent to the Internet and there is no analytics.</p>
+      <h3>It never connects to your devices</h3>
+      <p>You upload or paste a configuration. ConfigSentry never logs in to switches, routers or firewalls and never asks for device passwords.</p>
+      <h3>Nothing is saved</h3>
+      <p>Configurations are read in memory to run the audit and are not written to disk. Archives are opened in memory too. A report is saved only when you download one.</p>
+      <h3>Secrets are masked</h3>
+      <p>Passwords, hashes, keys and SNMP communities are replaced with **** in results and reports. You can turn masking off on your own screen, but do not share screenshots or reports while it is off.</p>
+      <h3>Use it responsibly</h3>
+      <p>Only audit devices you own or are authorised to assess, and never commit real configurations to a public repository.</p>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="foot-in">
+    <span>ConfigSentry <span id="ver"></span>. Open source under the MIT license.</span>
+    <span>Runs locally. Never connects to your devices.</span>
+  </div>
+</footer>
+
+<script src="/app.js"></script>
+</body>
+</html>

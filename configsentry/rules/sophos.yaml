@@ -1,0 +1,170 @@
+# ConfigSentry rule pack - Sophos Firewall (SFOS v18 - v21)  [BETA]
+# Input: Entities.xml, or the .tar file from
+#        Backup & firmware > Import export > Export full configuration.
+#
+# Sophos XML tag names vary slightly between versions. Settings that are not
+# found are marked Not applicable rather than failed.
+
+platform: sophos
+name: Sophos Firewall (SFOS)
+rules:
+
+  - id: SOP-001
+    title: Admin services enabled on the WAN zone
+    severity: high
+    category: Management Access
+    type: python
+    function: sop_wan_admin
+    description: >
+      HTTPS (web admin), SSH or other admin services on the WAN zone expose
+      the firewall management to the Internet.
+    remediation: |
+      Administration > Device access > Local service ACL:
+      untick HTTPS, SSH and other admin services for the WAN zone.
+      Use VPN or a local service ACL exception for trusted IPs only.
+    references: [NIST 800-53 AC-17, NIST 800-53 SC-7]
+
+  - id: SOP-002
+    title: Rule accepts any source, destination and service
+    severity: high
+    category: Firewall Policy
+    type: python
+    function: sop_any_any
+    description: >
+      An accept rule with no source networks, destination networks or
+      services gives no real filtering.
+    remediation: |
+      Rules and policies > Firewall rules: edit the rule and set specific
+      source networks, destination networks and services.
+    references: [NIST 800-53 AC-4, NIST 800-53 SC-7]
+
+  - id: SOP-003
+    title: Rule accepts any service
+    severity: medium
+    category: Firewall Policy
+    type: python
+    function: sop_any_service
+    description: >
+      Allowing every port and protocol breaks least privilege.
+    remediation: |
+      Rules and policies > Firewall rules: edit the rule and select only the
+      services the application needs.
+    references: [NIST 800-53 AC-4, NIST 800-53 CM-7]
+
+  - id: SOP-004
+    title: Accept rule with traffic logging disabled
+    severity: medium
+    category: Logging
+    type: python
+    function: sop_logging
+    description: >
+      Without logging, you cannot investigate what traffic the rule allowed.
+    remediation: |
+      Rules and policies > Firewall rules: edit the rule and tick
+      "Log firewall traffic".
+    references: [NIST 800-53 AU-2, NIST 800-53 AU-12]
+
+  - id: SOP-005
+    title: Inbound WAN rule without IPS
+    severity: low
+    category: Firewall Policy
+    type: python
+    function: sop_wan_ips
+    description: >
+      Traffic accepted from the WAN zone should be inspected by an intrusion
+      prevention policy.
+    remediation: |
+      Rules and policies > Firewall rules: edit the rule and select an IPS
+      policy (for example, lantowan_general or a server policy).
+    references: [NIST 800-53 SI-4]
+
+  - id: SOP-006
+    title: Default SNMP community (public/private) in use
+    severity: high
+    category: SNMP
+    type: python
+    function: sop_snmp_default
+    description: >
+      'public' and 'private' are the first communities every scanner tries.
+    remediation: |
+      Administration > SNMP: rename the community, or use SNMPv3 users.
+    references: [NIST 800-53 IA-5]
+
+  - id: SOP-007
+    title: SNMPv1 / v2c enabled
+    severity: medium
+    category: SNMP
+    type: python
+    function: sop_snmp_v1v2
+    description: >
+      SNMPv1 and v2c send the community in clear text. Use SNMPv3.
+    remediation: |
+      Administration > SNMP: disable v1 and v2c on the community and
+      create an SNMPv3 user.
+    references: [NIST 800-53 SC-8]
+
+  - id: SOP-008
+    title: Admin login blocking (lockout) is disabled
+    severity: medium
+    category: AAA
+    type: python
+    function: sop_lockout
+    description: >
+      Without login blocking, admin accounts can be attacked with unlimited
+      password guesses.
+    remediation: |
+      Administration > Admin and user settings > Login security:
+      enable "Block login" after 5 unsuccessful attempts.
+    references: [NIST 800-53 AC-7]
+
+  - id: SOP-009
+    title: Admin session timeout is disabled or too long
+    severity: low
+    category: Management Access
+    type: python
+    function: sop_session_timeout
+    description: >
+      Long or disabled session logout leaves unattended admin sessions open.
+    remediation: |
+      Administration > Admin and user settings > Login security:
+      set "Log out admin session after" to 10 minutes.
+    references: [NIST 800-53 AC-12]
+
+  - id: SOP-010
+    title: Password complexity check is disabled
+    severity: medium
+    category: Passwords
+    type: python
+    function: sop_password_complexity
+    description: >
+      Without the complexity check, admins can set short or simple passwords.
+    remediation: |
+      Administration > Admin and user settings > Administrator password
+      complexity settings: enable the check, minimum length 12 or more.
+    references: [NIST 800-53 IA-5]
+
+  - id: SOP-011
+    title: Login disclaimer is disabled
+    severity: low
+    category: Management Access
+    type: python
+    function: sop_disclaimer
+    description: >
+      A login disclaimer states that access is restricted and monitored.
+    remediation: |
+      Administration > Admin and user settings > Login disclaimer settings:
+      enable the disclaimer.
+    references: [NIST 800-53 AC-8]
+
+  - id: SOP-012
+    title: No syslog server configured
+    severity: low
+    category: Logging
+    type: python
+    function: sop_syslog
+    description: >
+      Without a syslog server, logs stay on the firewall and cannot be
+      correlated in a SIEM.
+    remediation: |
+      System services > Log settings: add a syslog server.
+    references: [NIST 800-53 AU-6, NIST 800-53 AU-9]

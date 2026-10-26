@@ -1,0 +1,198 @@
+# ConfigSentry rule pack - MikroTik RouterOS (v6 / v7)
+# Input: "/export" (shows only non-default settings).
+#
+# Because /export hides defaults, these rules use the RouterOS defaults when a
+# setting is not shown. /export does not include users or passwords, so user
+# accounts are not checked.
+
+platform: mikrotik
+name: MikroTik RouterOS
+rules:
+
+  - id: MTK-001
+    title: Insecure IP services enabled (telnet / ftp / www / api)
+    severity: high
+    category: Management Access
+    type: python
+    function: mt_insecure_services
+    description: >
+      Telnet, FTP, HTTP (www) and the plain API send credentials in clear text.
+      They are enabled by default on RouterOS.
+    remediation: |
+      /ip service
+      set telnet disabled=yes
+      set ftp disabled=yes
+      set www disabled=yes
+      set api disabled=yes
+    references: [NIST 800-53 SC-8, NIST 800-53 CM-7]
+
+  - id: MTK-002
+    title: IP services not restricted to management addresses
+    severity: medium
+    category: Management Access
+    type: python
+    function: mt_service_address
+    description: >
+      Services without 'address=' accept connections from any IP. Limit SSH,
+      Winbox and the API to the management subnet.
+    remediation: |
+      /ip service
+      set ssh address=<MGMT-SUBNET>
+      set winbox address=<MGMT-SUBNET>
+      set api-ssl address=<MGMT-SUBNET>
+    references: [NIST 800-53 AC-17]
+
+  - id: MTK-003
+    title: No input-chain firewall drop rule
+    severity: high
+    category: Firewall Policy
+    type: python
+    function: mt_input_firewall
+    description: >
+      Without a drop rule in the input chain, every service on the router is
+      reachable from all interfaces, including the Internet.
+    remediation: |
+      /ip firewall filter
+      add chain=input connection-state=established,related action=accept
+      add chain=input src-address=<MGMT-SUBNET> action=accept
+      add chain=input in-interface-list=WAN action=drop comment="drop all from WAN"
+    references: [NIST 800-53 SC-7]
+
+  - id: MTK-004
+    title: MAC Winbox / MAC Telnet available on all interfaces
+    severity: medium
+    category: Management Access
+    type: line_present
+    pattern: '^/tool mac-server (mac-winbox )?set .*allowed-interface-list=(none|\S*lan\S*|\S*mgmt\S*)\b'
+    missing_message: MAC server is not limited (default allows all interfaces).
+    description: >
+      The MAC server allows Layer 2 management access (MAC Telnet / Winbox)
+      without an IP address. Limit it to a management interface list or turn
+      it off.
+    remediation: |
+      /tool mac-server set allowed-interface-list=none
+      /tool mac-server mac-winbox set allowed-interface-list=MGMT
+    references: [NIST 800-53 CM-7, NIST 800-53 AC-17]
+
+  - id: MTK-005
+    title: Neighbor discovery enabled on all interfaces
+    severity: low
+    category: Services
+    type: line_present
+    pattern: '^/ip neighbor discovery-settings set .*discover-interface-list=(none|\S*lan\S*|\S*mgmt\S*)\b'
+    missing_message: Neighbor discovery is not limited (default is all interfaces).
+    description: >
+      MNDP/CDP/LLDP advertise the model, version and addresses to neighbours,
+      including on Internet-facing interfaces.
+    remediation: |
+      /ip neighbor discovery-settings set discover-interface-list=LAN
+    references: [NIST 800-53 CM-7]
+
+  - id: MTK-006
+    title: Bandwidth test server is enabled
+    severity: low
+    category: Services
+    type: line_present
+    pattern: '^/tool bandwidth-server set .*\benabled=no\b'
+    missing_message: The bandwidth test server is enabled (default).
+    description: >
+      The bandwidth server can be abused to load the router or the link.
+    remediation: |
+      /tool bandwidth-server set enabled=no
+    references: [NIST 800-53 CM-7]
+
+  - id: MTK-007
+    title: DNS server accepts remote requests
+    severity: medium
+    category: Services
+    type: line_absent
+    pattern: '^/ip dns set .*\ballow-remote-requests=yes\b'
+    description: >
+      With remote requests allowed, the router answers DNS queries. Without an
+      input firewall on WAN, it becomes an open resolver used in DDoS attacks.
+      Make sure WAN DNS (UDP/TCP 53) is blocked.
+    remediation: |
+      /ip firewall filter
+      add chain=input in-interface-list=WAN protocol=udp dst-port=53 action=drop
+      add chain=input in-interface-list=WAN protocol=tcp dst-port=53 action=drop
+    references: [NIST 800-53 SC-5, NIST 800-53 SC-7]
+
+  - id: MTK-008
+    title: SOCKS or web proxy enabled
+    severity: medium
+    category: Services
+    type: line_absent
+    pattern: '^/ip (socks|proxy) set .*\benabled=yes\b'
+    description: >
+      An open SOCKS or web proxy can be abused to relay attacks. These are
+      often enabled by malware on compromised MikroTik routers.
+    remediation: |
+      /ip socks set enabled=no
+      /ip proxy set enabled=no
+    references: [NIST 800-53 CM-7]
+
+  - id: MTK-009
+    title: UPnP is enabled
+    severity: medium
+    category: Services
+    type: line_absent
+    pattern: '^/ip upnp set .*\benabled=yes\b'
+    description: >
+      UPnP lets internal devices open ports on the router without approval.
+    remediation: |
+      /ip upnp set enabled=no
+    references: [NIST 800-53 CM-7]
+
+  - id: MTK-010
+    title: RoMON is enabled
+    severity: low
+    category: Services
+    type: line_absent
+    pattern: '^/tool romon set .*\benabled=yes\b'
+    description: >
+      RoMON gives Layer 2 management access across routers. Enable it only if
+      you need it, with a secret.
+    remediation: |
+      /tool romon set enabled=no
+    references: [NIST 800-53 CM-7]
+
+  - id: MTK-011
+    title: SNMP enabled with the default community
+    severity: high
+    category: SNMP
+    type: python
+    function: mt_snmp_default
+    description: >
+      The default SNMP community is 'public', the first one every scanner
+      tries.
+    remediation: |
+      /snmp community set [ find default=yes ] name=<UNIQUE-COMMUNITY> addresses=<NMS-IP>/32
+    references: [NIST 800-53 IA-5]
+
+  - id: MTK-012
+    title: No remote syslog configured
+    severity: low
+    category: Logging
+    type: line_present
+    pattern: '^/system logging action (add|set) .*\b(target=remote|remote=\d)'
+    missing_message: No remote logging action found.
+    description: >
+      Without remote logging, logs are lost on reboot and cannot be used for
+      incident investigation.
+    remediation: |
+      /system logging action set remote remote=<SYSLOG-IP>
+      /system logging add topics=info action=remote
+    references: [NIST 800-53 AU-6, NIST 800-53 AU-9]
+
+  - id: MTK-013
+    title: No NTP client configured
+    severity: low
+    category: Logging
+    type: line_present
+    pattern: '^/(system ntp client|ip cloud) set .*\b(enabled=yes|servers=|primary-ntp=|update-time=yes)'
+    missing_message: No NTP client configuration found.
+    description: >
+      Without NTP, log timestamps cannot be trusted.
+    remediation: |
+      /system ntp client set enabled=yes servers=<NTP-IP>
+    references: [NIST 800-53 AU-8]

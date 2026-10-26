@@ -1,0 +1,426 @@
+# ConfigSentry rule pack - Huawei VRP (V5 / V8)
+# Input: "display current-configuration" from S-series / CE switches and AR routers.
+#
+# There is no CIS Benchmark for Huawei VRP, so rules reference NIST 800-53
+# controls and Huawei hardening guidance.
+#
+# All remediation commands are entered in system view (system-view).
+
+platform: huawei_vrp
+name: Huawei VRP
+rules:
+
+  # ------------------------------------------------------------------ #
+  # Management access
+  # ------------------------------------------------------------------ #
+  - id: VRP-001
+    title: Telnet server is enabled
+    severity: high
+    category: Management Access
+    type: line_absent
+    pattern: '^telnet (ipv6 )?server enable$'
+    description: >
+      Telnet sends usernames, passwords and commands in clear text. Use STelnet
+      (SSH) only.
+    remediation: |
+      undo telnet server enable
+      undo telnet ipv6 server enable
+    references: [NIST 800-53 SC-8, NIST 800-53 CM-7]
+
+  - id: VRP-002
+    title: SSH (STelnet) server is not enabled
+    severity: medium
+    category: Management Access
+    type: line_present
+    pattern: '^stelnet (ipv4 |ipv6 )?server enable$'
+    missing_message: No 'stelnet server enable' found.
+    description: >
+      Without the STelnet (SSH) server, the device can only be managed over
+      the console or insecure protocols.
+    remediation: |
+      rsa local-key-pair create
+      stelnet server enable
+      ssh user <USER> authentication-type password
+      ssh user <USER> service-type stelnet
+    references: [NIST 800-53 SC-8]
+
+  - id: VRP-003
+    title: Telnet allowed on VTY lines
+    severity: high
+    category: Management Access
+    type: block
+    parent: '^(user-interface|line) vty\b'
+    forbid: '^protocol inbound (telnet|all)$'
+    description: >
+      The VTY lines accept Telnet, which sends credentials in clear text.
+    remediation: |
+      user-interface vty 0 4
+       protocol inbound ssh
+    references: [NIST 800-53 SC-8]
+
+  - id: VRP-004
+    title: VTY inbound protocol is not explicitly set
+    severity: medium
+    category: Management Access
+    type: block
+    parent: '^(user-interface|line) vty\b'
+    require: '^protocol inbound\b'
+    description: >
+      When 'protocol inbound' is not set, the allowed protocols depend on the
+      VRP version default, which may include Telnet. Set it explicitly.
+    remediation: |
+      user-interface vty 0 4
+       protocol inbound ssh
+    references: [NIST 800-53 CM-6]
+
+  - id: VRP-005
+    title: VTY lines do not use AAA authentication
+    severity: high
+    category: AAA
+    type: block
+    parent: '^(user-interface|line) vty\b'
+    require: '^authentication-mode aaa$'
+    description: >
+      VTY lines with 'authentication-mode password' use one shared password,
+      and 'none' allows login without any password. Use AAA so every admin has
+      a named account and actions are traceable.
+    remediation: |
+      user-interface vty 0 4
+       authentication-mode aaa
+    references: [NIST 800-53 IA-2, NIST 800-53 AC-2]
+
+  - id: VRP-006
+    title: VTY lines have no ACL (any IP can try to log in)
+    severity: medium
+    category: Management Access
+    type: block
+    parent: '^(user-interface|line) vty\b'
+    require: '^acl (ipv6 )?\S+ inbound$'
+    description: >
+      Without an ACL, the management plane is reachable from any source
+      address. Restrict it to the management subnet or jump hosts.
+    remediation: |
+      acl number 2000
+       rule 5 permit source <MGMT-SUBNET> <WILDCARD>
+       rule 10 deny
+      user-interface vty 0 4
+       acl 2000 inbound
+    references: [NIST 800-53 AC-17]
+
+  - id: VRP-007
+    title: VTY session timeout is disabled
+    severity: medium
+    category: Management Access
+    type: block
+    parent: '^(user-interface|line) vty\b'
+    forbid: '^idle-timeout 0( 0)?$'
+    description: >
+      'idle-timeout 0' keeps idle admin sessions open forever.
+    remediation: |
+      user-interface vty 0 4
+       idle-timeout 10 0
+    references: [NIST 800-53 AC-12]
+
+  - id: VRP-008
+    title: Console port has no authentication
+    severity: high
+    category: Management Access
+    type: block
+    parent: '^(user-interface|line) con 0'
+    forbid: '^authentication-mode none$'
+    description: >
+      Anyone with physical access can log in to the console without a password.
+    remediation: |
+      user-interface con 0
+       authentication-mode aaa
+    references: [NIST 800-53 IA-2]
+
+  - id: VRP-009
+    title: Console session timeout is disabled
+    severity: low
+    category: Management Access
+    type: block
+    parent: '^(user-interface|line) con 0'
+    forbid: '^idle-timeout 0( 0)?$'
+    description: >
+      An open console session with no timeout can be used by anyone with
+      physical access.
+    remediation: |
+      user-interface con 0
+       idle-timeout 10 0
+    references: [NIST 800-53 AC-12]
+
+  - id: VRP-010
+    title: HTTP (clear-text) web management is enabled
+    severity: medium
+    category: Management Access
+    type: line_absent
+    pattern: '^http server enable$'
+    description: >
+      HTTP sends web management credentials in clear text. Disable it and use
+      HTTPS only if web management is needed.
+    remediation: |
+      undo http server enable
+      http secure-server enable
+    references: [NIST 800-53 SC-8, NIST 800-53 CM-7]
+
+  - id: VRP-011
+    title: FTP server is enabled
+    severity: medium
+    category: Services
+    type: line_absent
+    pattern: '^ftp (ipv6 )?server enable$'
+    description: >
+      FTP sends credentials and files in clear text. Use SFTP for file
+      transfer.
+    remediation: |
+      undo ftp server enable
+      sftp server enable
+    references: [NIST 800-53 SC-8, NIST 800-53 CM-7]
+
+  - id: VRP-012
+    title: No login banner
+    severity: low
+    category: Management Access
+    type: line_present
+    pattern: '^header (login|shell)\b'
+    missing_message: No 'header login' or 'header shell' found.
+    description: >
+      A warning banner states that access is restricted and monitored.
+    remediation: |
+      header login information "Authorised access only. All activity is monitored and logged."
+    references: [NIST 800-53 AC-8]
+
+  # ------------------------------------------------------------------ #
+  # Local accounts
+  # ------------------------------------------------------------------ #
+  - id: VRP-013
+    title: Local user password stored in clear text
+    severity: high
+    category: Passwords
+    type: line_absent
+    scope: all
+    pattern: '^local-user \S+ password simple\b'
+    description: >
+      'password simple' stores the password in plain text in the configuration.
+    remediation: |
+      aaa
+       local-user <USER> password irreversible-cipher <STRONG-PASSWORD>
+    references: [NIST 800-53 IA-5]
+
+  - id: VRP-014
+    title: Local user password uses reversible 'cipher'
+    severity: medium
+    category: Passwords
+    type: line_absent
+    scope: all
+    pattern: '^local-user \S+ password cipher\b'
+    description: >
+      On many VRP versions 'password cipher' is reversible encryption. Use
+      'irreversible-cipher' so the password is stored as a one-way hash.
+    remediation: |
+      aaa
+       local-user <USER> password irreversible-cipher <STRONG-PASSWORD>
+    references: [NIST 800-53 IA-5]
+
+  - id: VRP-015
+    title: Local user allowed to use Telnet, FTP or HTTP
+    severity: medium
+    category: AAA
+    type: line_absent
+    scope: all
+    pattern: '^local-user \S+ service-type .*\b(telnet|ftp|http)\b'
+    description: >
+      The account can log in over clear-text protocols. Allow only secure
+      services such as ssh and terminal.
+    remediation: |
+      aaa
+       local-user <USER> service-type ssh terminal
+    references: [NIST 800-53 SC-8, NIST 800-53 AC-6]
+
+  # ------------------------------------------------------------------ #
+  # SSH cryptography
+  # ------------------------------------------------------------------ #
+  - id: VRP-016
+    title: Weak SSH ciphers allowed
+    severity: medium
+    category: Cryptography
+    type: line_absent
+    pattern: '^ssh (server|client) cipher .*\b(des_cbc|3des_cbc|arcfour\d*|blowfish_cbc)\b'
+    description: >
+      DES, 3DES, RC4 (arcfour) and Blowfish are weak ciphers. Allow only AES
+      in CTR or GCM mode.
+    remediation: |
+      ssh server cipher aes256_ctr aes128_ctr
+    references: [NIST 800-53 SC-13]
+
+  - id: VRP-017
+    title: Weak SSH HMAC algorithms allowed
+    severity: low
+    category: Cryptography
+    type: line_absent
+    pattern: '^ssh (server|client) hmac .*\b(md5|md5_96|sha1_96)\b'
+    description: >
+      MD5-based and truncated SHA-1 HMACs are weak. Use SHA-2.
+    remediation: |
+      ssh server hmac sha2_256 sha2_512
+    references: [NIST 800-53 SC-13]
+
+  - id: VRP-018
+    title: Weak SSH key exchange (DH group 1) allowed
+    severity: medium
+    category: Cryptography
+    type: line_absent
+    pattern: '^ssh (server|client) key-exchange .*\bdh_group1_sha1\b'
+    description: >
+      Diffie-Hellman group 1 (768-bit) is too weak and vulnerable to Logjam-style
+      attacks.
+    remediation: |
+      ssh server key-exchange dh_group16_sha512 dh_group14_sha256
+    references: [NIST 800-53 SC-13]
+
+  # ------------------------------------------------------------------ #
+  # SNMP
+  # ------------------------------------------------------------------ #
+  - id: VRP-019
+    title: SNMPv1 or SNMPv2c enabled
+    severity: medium
+    category: SNMP
+    type: line_absent
+    pattern: '^snmp-agent sys-info version .*\b(v1|v2c|all)\b'
+    description: >
+      SNMPv1 and v2c send community strings in clear text. Use SNMPv3 with
+      authentication and privacy (authPriv).
+    remediation: |
+      snmp-agent sys-info version v3
+      undo snmp-agent sys-info version v1 v2c
+      snmp-agent group v3 <GROUP> privacy acl <ACL>
+      snmp-agent usm-user v3 <USER> group <GROUP>
+    references: [NIST 800-53 SC-8, NIST 800-53 IA-5]
+
+  - id: VRP-020
+    title: Default SNMP community (public/private) in use
+    severity: high
+    category: SNMP
+    type: line_absent
+    pattern: '^snmp-agent community (read|write) (public|private)\b'
+    description: >
+      'public' and 'private' are the first communities every scanner tries.
+    remediation: |
+      undo snmp-agent community public
+      undo snmp-agent community private
+      snmp-agent community read cipher <UNIQUE-COMMUNITY> acl <ACL>
+    references: [NIST 800-53 IA-5]
+
+  - id: VRP-021
+    title: SNMP write community configured
+    severity: high
+    category: SNMP
+    type: line_absent
+    pattern: '^snmp-agent community write\b'
+    description: >
+      A write community lets anyone who knows it change the configuration over
+      SNMP.
+    remediation: |
+      undo snmp-agent community <COMMUNITY>
+      (use SNMPv3 for any write access)
+    references: [NIST 800-53 AC-6]
+
+  - id: VRP-022
+    title: SNMP community without an ACL
+    severity: medium
+    category: SNMP
+    type: line_absent
+    pattern: '^snmp-agent community (read|write) (?!.*\bacl\b)'
+    description: >
+      Without an ACL, any host that knows the community string can query the
+      device.
+    remediation: |
+      acl number 2001
+       rule 5 permit source <NMS-IP> 0
+      snmp-agent community read cipher <COMMUNITY> acl 2001
+    references: [NIST 800-53 AC-3]
+
+  # ------------------------------------------------------------------ #
+  # Logging and time
+  # ------------------------------------------------------------------ #
+  - id: VRP-023
+    title: No remote syslog server configured
+    severity: low
+    category: Logging
+    type: line_present
+    pattern: '^info-center loghost (ipv6 )?\S+'
+    missing_message: No 'info-center loghost' found.
+    description: >
+      Without a remote syslog server, logs are lost on reboot and cannot be
+      used for incident investigation.
+    remediation: |
+      info-center loghost <SYSLOG-IP>
+      info-center loghost source <MGMT-INTERFACE>
+    references: [NIST 800-53 AU-6, NIST 800-53 AU-9]
+
+  - id: VRP-024
+    title: No NTP server configured
+    severity: low
+    category: Logging
+    type: line_present
+    pattern: '^ntp-service unicast-server\b'
+    missing_message: No 'ntp-service unicast-server' found.
+    description: >
+      Without NTP, log timestamps cannot be trusted or matched across devices.
+    remediation: |
+      ntp-service unicast-server <NTP-IP-1>
+      ntp-service unicast-server <NTP-IP-2>
+    references: [NIST 800-53 AU-8]
+
+  # ------------------------------------------------------------------ #
+  # Layer 2 and routing
+  # ------------------------------------------------------------------ #
+  - id: VRP-025
+    title: BPDU protection is not enabled
+    severity: medium
+    category: Layer 2
+    type: python
+    function: vrp_bpdu_protection
+    description: >
+      Without BPDU protection, a user can connect a switch to an edge port and
+      cause a loop or try to become the root bridge. Eth-Trunks and their
+      members are skipped. BPDU protection applies to ports set as edge ports.
+    remediation: |
+      stp bpdu-protection
+      interface <ACCESS-PORT>
+       stp edged-port enable
+    references: [NIST 800-53 SC-5]
+
+  - id: VRP-026
+    title: DHCP snooping is not enabled
+    severity: low
+    category: Layer 2
+    type: python
+    function: vrp_dhcp_snooping
+    description: >
+      Without DHCP snooping, a rogue DHCP server on an access port can hand out
+      a fake gateway and intercept traffic.
+    remediation: |
+      dhcp enable
+      dhcp snooping enable
+      vlan <USER-VLAN>
+       dhcp snooping enable
+      interface <UPLINK>
+       dhcp snooping trusted
+    references: [NIST 800-53 SC-7]
+
+  - id: VRP-027
+    title: OSPF is running without authentication
+    severity: low
+    category: Routing
+    type: python
+    function: vrp_ospf_authentication
+    description: >
+      Without authentication, any device on the segment can form an OSPF
+      adjacency and inject false routes.
+    remediation: |
+      ospf 1
+       area 0.0.0.0
+        authentication-mode hmac-sha256 1 cipher <KEY>
+    references: [NIST 800-53 SC-8]

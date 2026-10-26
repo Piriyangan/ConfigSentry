@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ConfigSentry report - {{ r.hostname or "device" }}</title>
+<style>
+  :root {
+    --bg: #FFFFFF; --soft: #F7F8FA; --line: #E6E8EC; --text: #1C2330; --muted: #667085;
+    --accent: #2563EB;
+    --high: #C93838; --high-bg: #FDF0F0; --medium: #B7650B; --medium-bg: #FEF5E7;
+    --low: #2F6DB5; --low-bg: #EEF4FB; --pass: #1F8A5B;
+    --sans: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: Consolas, "Cascadia Mono", Menlo, "DejaVu Sans Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.55 var(--sans); color: var(--text); background: var(--bg); }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 40px 24px 56px; }
+  header { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap;
+           padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+  .brand { color: var(--muted); font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+  h1 { margin: 0; font-size: 28px; letter-spacing: -.02em; }
+  .gen { color: var(--muted); font-size: 13px; text-align: right; }
+  .meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px 24px; margin: 22px 0; }
+  .meta div { font-size: 14px; }
+  .meta span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 2px; }
+  .score { display: grid; grid-template-columns: 150px 1fr; gap: 28px; align-items: center;
+           border: 1px solid var(--line); border-radius: 12px; padding: 22px 26px; margin-bottom: 28px; }
+  .verdict { font-size: 17px; font-weight: 650; margin: 0 0 12px; }
+  .bar { display: flex; height: 8px; border-radius: 999px; overflow: hidden; background: var(--soft); gap: 2px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 26px; margin-top: 12px; }
+  .legend div { color: var(--muted); font-size: 13px; }
+  .legend b { display: block; font-size: 22px; color: var(--text); line-height: 1.15; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+  h2 { font-size: 17px; margin: 30px 0 12px; }
+  .finding { border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin-bottom: 12px; page-break-inside: avoid; }
+  .ftitle { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; font-weight: 600; font-size: 15px; margin-bottom: 8px; }
+  .sev { font-size: 12px; font-weight: 700; padding: 2px 9px; border-radius: 6px; }
+  .sev-high { color: var(--high); background: var(--high-bg); }
+  .sev-medium { color: var(--medium); background: var(--medium-bg); }
+  .sev-low { color: var(--low); background: var(--low-bg); }
+  .rid { color: var(--muted); font-family: var(--mono); font-size: 12px; font-weight: 400; }
+  .cat { color: var(--muted); font-size: 12px; font-weight: 400; margin-left: auto; }
+  .desc { color: #344054; max-width: 78ch; }
+  .label { font-size: 13px; font-weight: 600; margin: 12px 0 5px; }
+  pre { margin: 0; padding: 10px 13px; border-radius: 8px; overflow-x: auto;
+        font: 12.5px/1.55 var(--mono); white-space: pre-wrap; word-break: break-word; }
+  pre.ev { background: var(--soft); border: 1px solid var(--line); color: #344054; }
+  pre.fix { background: #F5F8FF; border: 1px solid #D6E2FB; color: #1E3A8A; }
+  .refs { font-size: 12px; color: var(--muted); margin-top: 10px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); font-size: 13px; vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  .ok { color: var(--pass); font-weight: 600; }
+  footer { margin-top: 36px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--line); padding-top: 14px; }
+  @media (max-width: 640px) { .score { grid-template-columns: 1fr; justify-items: center; text-align: center; } .legend { justify-content: center; } .gen { text-align: left; } }
+  @media print { .wrap { padding: 0; } .finding, .score { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="brand">ConfigSentry security report</div>
+      <h1>{{ r.hostname or "Audit result" }}</h1>
+    </div>
+    <div class="gen">Generated {{ r.generated_at }}<br>ConfigSentry {{ r.tool_version }}</div>
+  </header>
+
+  <div class="meta">
+    <div><span>Platform</span>{{ r.platform_name }}</div>
+    <div><span>Source</span>{{ r.source }}</div>
+    <div><span>Checks run</span>{{ r.results|length - r.not_applicable|length }} of {{ r.results|length }}</div>
+    <div><span>Secrets</span>{{ "Masked" if masked else "Not masked" }}</div>
+  </div>
+
+  {% set high = r.count("high") %}{% set med = r.count("medium") %}{% set low = r.count("low") %}{% set ok = r.passed|length %}
+  {% set total = (high + med + low + ok) or 1 %}
+  {% set color = "#1F8A5B" if r.score >= 75 else ("#B7650B" if r.score >= 40 else "#C93838") %}
+  <div class="score">
+    <svg width="140" height="140" viewBox="0 0 160 160" role="img" aria-label="Security score {{ r.score }} out of 100, grade {{ r.grade }}">
+      <circle cx="80" cy="80" r="64" fill="none" stroke="#EEF0F3" stroke-width="10"/>
+      {% if r.score > 0 %}
+      <circle cx="80" cy="80" r="64" fill="none" stroke="{{ color }}" stroke-width="10" stroke-linecap="round"
+              stroke-dasharray="{{ '%.1f'|format(402.1 * r.score / 100) }} 402.1" transform="rotate(-90 80 80)"/>
+      {% endif %}
+      <text x="80" y="86" text-anchor="middle" font-size="38" font-weight="700" fill="#1C2330" font-family="Segoe UI, system-ui, sans-serif">{{ r.score }}</text>
+      <text x="80" y="108" text-anchor="middle" font-size="11" fill="#667085" font-family="Segoe UI, system-ui, sans-serif">Grade {{ r.grade }}</text>
+    </svg>
+    <div>
+      <p class="verdict">
+        {% if not r.failed %}No issues found
+        {% elif high %}{{ high }} high-risk {{ "issue" if high == 1 else "issues" }} to fix first
+        {% elif med %}{{ med }} medium-risk {{ "issue" if med == 1 else "issues" }}
+        {% else %}Only low-risk findings{% endif %}
+      </p>
+      <div class="bar">
+        {% for n, c in [(high, "#C93838"), (med, "#B7650B"), (low, "#2F6DB5"), (ok, "#1F8A5B")] %}{% if n %}<span style="width:{{ '%.2f'|format(100 * n / total) }}%;background:{{ c }}"></span>{% endif %}{% endfor %}
+      </div>
+      <div class="legend">
+        <div><b>{{ high }}</b><span class="dot" style="background:#C93838"></span>High</div>
+        <div><b>{{ med }}</b><span class="dot" style="background:#B7650B"></span>Medium</div>
+        <div><b>{{ low }}</b><span class="dot" style="background:#2F6DB5"></span>Low</div>
+        <div><b>{{ ok }}</b><span class="dot" style="background:#1F8A5B"></span>Passed</div>
+      </div>
+    </div>
+  </div>
+
+  <h2>Findings ({{ r.failed|length }})</h2>
+  {% if not r.failed %}<p>No issues found by the current rule set.</p>{% endif %}
+  {% for f in r.failed %}
+  <div class="finding">
+    <div class="ftitle">
+      <span class="sev sev-{{ f.severity }}">{{ f.severity|capitalize }}</span>
+      <span class="rid">{{ f.id }}</span>
+      <span>{{ f.title }}</span>
+      <span class="cat">{{ f.category }}</span>
+    </div>
+    <div class="desc">{{ f.description }}</div>
+    {% if f.evidence %}<div class="label">Evidence</div><pre class="ev">{{ f.evidence|join("\n") }}</pre>{% endif %}
+    <div class="label">Recommended fix</div><pre class="fix">{{ f.remediation }}</pre>
+    {% if f.references %}<div class="refs">References: {{ f.references|join(", ") }}</div>{% endif %}
+  </div>
+  {% endfor %}
+
+  <h2>Checks passed ({{ r.passed|length }})</h2>
+  {% if r.passed %}
+  <table>
+    <tr><th style="width:100px">Rule</th><th>Check (issue not found)</th><th style="width:160px">Category</th><th style="width:70px">Result</th></tr>
+    {% for p in r.passed %}<tr><td class="rid">{{ p.id }}</td><td>{{ p.title }}</td><td>{{ p.category }}</td><td class="ok">Pass</td></tr>{% endfor %}
+  </table>
+  {% else %}<p style="color:var(--muted)">No checks passed.</p>{% endif %}
+
+  {% if r.not_applicable %}
+  <h2>Not applicable ({{ r.not_applicable|length }})</h2>
+  <table>
+    <tr><th style="width:100px">Rule</th><th>Check</th><th>Reason</th></tr>
+    {% for n in r.not_applicable %}<tr><td class="rid">{{ n.id }}</td><td>{{ n.title }}</td><td>{{ n.evidence|join("; ") }}</td></tr>{% endfor %}
+  </table>
+  {% endif %}
+
+  <footer>
+    Generated by ConfigSentry, an open-source configuration auditor. Results are based on the configuration text only
+    and do not replace a full security assessment. Review the recommended commands before applying them in production.
+    To save as PDF, use your browser's Print option.
+  </footer>
+</div>
+</body>
+</html>

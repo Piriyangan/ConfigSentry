@@ -1,0 +1,39 @@
+: Saved
+: FAKE SAMPLE CONFIG FOR TESTING CONFIGSENTRY - NOT FROM A REAL DEVICE
+:
+ASA Version 9.14(4)
+!
+hostname LAB-ASA-01
+enable password 8Ry2YjIyt7RRXU24 encrypted
+names
+!
+interface GigabitEthernet0/0
+ nameif outside
+ security-level 0
+ ip address 203.0.113.2 255.255.255.248
+!
+interface GigabitEthernet0/1
+ nameif inside
+ security-level 100
+ ip address 192.0.2.1 255.255.255.0
+!
+access-list OUTSIDE_IN extended permit ip any any
+access-group OUTSIDE_IN in interface outside
+!
+username admin password FAKEFAKEFAKEFAKE encrypted privilege 15
+!
+http server enable
+http 0.0.0.0 0.0.0.0 outside
+ssh 0.0.0.0 0.0.0.0 outside
+ssh timeout 60
+ssh key-exchange group dh-group1-sha1
+telnet 192.0.2.0 255.255.255.0 inside
+telnet timeout 5
+console timeout 0
+ssl server-version tlsv1
+!
+snmp-server host inside 192.0.2.50 community public version 2c
+snmp-server community private
+!
+banner motd Authorised access only
+: end

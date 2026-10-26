@@ -1,0 +1,462 @@
+# ConfigSentry rule pack - Cisco IOS / IOS-XE
+#
+# CIS references point to the section of the CIS Cisco IOS Benchmark
+# (1 Management Plane, 2 Control Plane, 3 Data Plane). Check the exact
+# recommendation number against the benchmark version you use.
+#
+# See CONTRIBUTING.md for how to add a rule.
+
+platform: cisco_ios
+name: Cisco IOS / IOS-XE
+rules:
+
+  # ------------------------------------------------------------------ #
+  # Passwords and local accounts
+  # ------------------------------------------------------------------ #
+  - id: IOS-001
+    title: Enable password is used instead of enable secret
+    severity: high
+    category: Passwords
+    type: line_absent
+    pattern: '^enable password\b'
+    description: >
+      'enable password' is stored in clear text or with reversible type 7
+      encoding. Anyone who sees the configuration can recover it.
+    remediation: |
+      no enable password
+      enable algorithm-type scrypt secret <STRONG-PASSWORD>
+    references: [CIS Cisco IOS 1.4 Password Rules, NIST 800-53 IA-5]
+
+  - id: IOS-002
+    title: Enable secret is not configured
+    severity: high
+    category: Passwords
+    type: line_present
+    pattern: '^enable (algorithm-type \S+ )?secret\b'
+    missing_message: No 'enable secret' found.
+    description: >
+      Without an enable secret, privileged EXEC mode is not protected by a
+      strong hashed password.
+    remediation: |
+      enable algorithm-type scrypt secret <STRONG-PASSWORD>
+    references: [CIS Cisco IOS 1.4 Password Rules, NIST 800-53 IA-5]
+
+  - id: IOS-003
+    title: Local user account uses 'password' instead of 'secret'
+    severity: high
+    category: Passwords
+    type: line_absent
+    pattern: '^username \S+ .*\bpassword\b'
+    description: >
+      Local users created with 'password' are stored in clear text or type 7,
+      which can be decoded with free online tools.
+    remediation: |
+      username <USER> privilege 15 algorithm-type scrypt secret <STRONG-PASSWORD>
+      ! then remove the old line:
+      no username <USER> password
+    references: [CIS Cisco IOS 1.4 Password Rules, NIST 800-53 IA-5]
+
+  - id: IOS-004
+    title: Reversible type 7 passwords or keys found
+    severity: medium
+    category: Passwords
+    type: line_absent
+    scope: all
+    pattern: '\b(password|key) 7 \S+'
+    description: >
+      Type 7 is only obfuscation, not encryption. These values can be decoded
+      instantly. Use type 8/9 secrets for users, and protect shared keys
+      (TACACS+, RADIUS, routing) with type 6 'password encryption aes'.
+    remediation: |
+      key config-key password-encrypt <MASTER-KEY>
+      password encryption aes
+      ! re-enter the affected passwords/keys so they are stored as type 6, 8 or 9
+    references: [CIS Cisco IOS 1.4 Password Rules, NIST 800-53 IA-5]
+
+  - id: IOS-005
+    title: MD5-based (type 5) secrets in use
+    severity: low
+    category: Passwords
+    type: line_absent
+    pattern: '^(enable secret 5|username \S+ .*secret 5) '
+    description: >
+      Type 5 secrets use salted MD5, which is weak against modern password
+      cracking. Type 9 (scrypt) or type 8 (PBKDF2-SHA256) is recommended.
+    remediation: |
+      enable algorithm-type scrypt secret <STRONG-PASSWORD>
+      username <USER> algorithm-type scrypt secret <STRONG-PASSWORD>
+    references: [CIS Cisco IOS 1.4 Password Rules, NIST 800-53 IA-5]
+
+  - id: IOS-006
+    title: Password encryption service is not enabled
+    severity: low
+    category: Passwords
+    type: line_present
+    pattern: '^service password-encryption$'
+    missing_message: No 'service password-encryption' found.
+    description: >
+      Without this service, some passwords appear in clear text in the
+      configuration. It only gives weak type 7 protection, so it is a minimum
+      baseline, not a replacement for strong secrets.
+    remediation: |
+      service password-encryption
+    references: [CIS Cisco IOS 1.4 Password Rules, NIST 800-53 IA-5]
+
+  # ------------------------------------------------------------------ #
+  # AAA and management access
+  # ------------------------------------------------------------------ #
+  - id: IOS-007
+    title: AAA new-model is not enabled
+    severity: medium
+    category: AAA
+    type: line_present
+    pattern: '^aaa new-model$'
+    missing_message: No 'aaa new-model' found.
+    description: >
+      Without AAA, the device cannot use centralised authentication
+      (TACACS+/RADIUS), command authorisation or accounting.
+    remediation: |
+      aaa new-model
+      aaa authentication login default group tacacs+ local
+      aaa authorization exec default group tacacs+ local
+      aaa accounting exec default start-stop group tacacs+
+    references: [CIS Cisco IOS 1.1 AAA Rules, NIST 800-53 AC-2, AU-2]
+
+  - id: IOS-008
+    title: SSH version 2 is not enforced
+    severity: medium
+    category: Management Access
+    type: line_present
+    pattern: '^ip ssh version 2$'
+    missing_message: No 'ip ssh version 2' found.
+    description: >
+      SSH version 1 has known cryptographic weaknesses. Force version 2 only.
+    remediation: |
+      ip ssh version 2
+    references: [CIS Cisco IOS 1.2 Access Rules, NIST 800-53 SC-8]
+
+  - id: IOS-009
+    title: HTTP (clear-text) management server is enabled
+    severity: medium
+    category: Management Access
+    type: line_absent
+    pattern: '^ip http server$'
+    description: >
+      The HTTP web interface sends credentials in clear text. Disable it, and
+      use HTTPS with an access class only if the web interface is needed.
+    remediation: |
+      no ip http server
+      ! only if needed:
+      ip http secure-server
+      ip http access-class ipv4 <MGMT-ACL>
+    references: [CIS Cisco IOS 2.1 Global Service Rules, NIST 800-53 CM-7]
+
+  - id: IOS-010
+    title: Telnet is allowed on VTY lines
+    severity: high
+    category: Management Access
+    type: block
+    parent: '^line vty\b'
+    forbid: '^transport input (.*\btelnet\b|all)'
+    description: >
+      Telnet sends usernames, passwords and commands in clear text. Only SSH
+      should be allowed for remote management.
+    remediation: |
+      line vty 0 15
+       transport input ssh
+    references: [CIS Cisco IOS 1.2 Access Rules, NIST 800-53 SC-8]
+
+  - id: IOS-011
+    title: VTY transport is not explicitly restricted
+    severity: medium
+    category: Management Access
+    type: block
+    parent: '^line vty\b'
+    require: '^transport input\b'
+    description: >
+      When 'transport input' is not set, the allowed protocols depend on the
+      IOS version default, which may include Telnet. Set it explicitly.
+    remediation: |
+      line vty 0 15
+       transport input ssh
+    references: [CIS Cisco IOS 1.2 Access Rules, NIST 800-53 CM-6]
+
+  - id: IOS-012
+    title: VTY lines have no access-class (any IP can try to log in)
+    severity: medium
+    category: Management Access
+    type: block
+    parent: '^line vty\b'
+    require: '^access-class \S+ in'
+    description: >
+      Without an access-class, the management plane is reachable from any
+      source address. Restrict it to the management subnet or jump hosts.
+    remediation: |
+      ip access-list standard MGMT-ACL
+       permit <MGMT-SUBNET> <WILDCARD>
+       deny any log
+      line vty 0 15
+       access-class MGMT-ACL in
+    references: [CIS Cisco IOS 1.2 Access Rules, NIST 800-53 AC-17]
+
+  - id: IOS-013
+    title: VTY session timeout is disabled
+    severity: medium
+    category: Management Access
+    type: block
+    parent: '^line vty\b'
+    forbid: '^exec-timeout 0( 0)?$'
+    description: >
+      'exec-timeout 0' keeps idle admin sessions open forever, which allows
+      session hijacking and wastes VTY lines.
+    remediation: |
+      line vty 0 15
+       exec-timeout 10 0
+    references: [CIS Cisco IOS 1.2 Access Rules, NIST 800-53 AC-12]
+
+  - id: IOS-014
+    title: Console session timeout is disabled
+    severity: low
+    category: Management Access
+    type: block
+    parent: '^line con 0'
+    forbid: '^exec-timeout 0( 0)?$'
+    description: >
+      An open console session with no timeout can be used by anyone with
+      physical access.
+    remediation: |
+      line con 0
+       exec-timeout 10 0
+    references: [CIS Cisco IOS 1.2 Access Rules, NIST 800-53 AC-12]
+
+  - id: IOS-015
+    title: Login brute-force protection is not configured
+    severity: low
+    category: Management Access
+    type: line_present
+    pattern: '^login block-for \d+'
+    missing_message: No 'login block-for' found.
+    description: >
+      'login block-for' temporarily blocks logins after repeated failures,
+      slowing down password guessing attacks.
+    remediation: |
+      login block-for 120 attempts 5 within 60
+      login on-failure log
+    references: [NIST 800-53 AC-7]
+
+  - id: IOS-016
+    title: No login or MOTD banner
+    severity: low
+    category: Management Access
+    type: line_present
+    pattern: '^banner (login|motd)\b'
+    missing_message: No login or MOTD banner found.
+    description: >
+      A warning banner states that access is restricted and monitored. Many
+      policies and legal teams require it.
+    remediation: |
+      banner login ^C
+      Authorised access only. All activity is monitored and logged.
+      ^C
+    references: [CIS Cisco IOS 1.3 Banner Rules, NIST 800-53 AC-8]
+
+  # ------------------------------------------------------------------ #
+  # SNMP
+  # ------------------------------------------------------------------ #
+  - id: IOS-017
+    title: Default SNMP community (public/private) in use
+    severity: high
+    category: SNMP
+    type: line_absent
+    pattern: '^snmp-server community (public|private)\b'
+    description: >
+      'public' and 'private' are the first communities every scanner tries.
+      They give read (or write) access to the device.
+    remediation: |
+      no snmp-server community public
+      no snmp-server community private
+      ! prefer SNMPv3 with authPriv:
+      snmp-server group SNMPV3-GROUP v3 priv access SNMP-ACL
+      snmp-server user <USER> SNMPV3-GROUP v3 auth sha <AUTH-PASS> priv aes 128 <PRIV-PASS>
+    references: [CIS Cisco IOS 1.5 SNMP Rules, NIST 800-53 IA-5]
+
+  - id: IOS-018
+    title: SNMP read-write community configured
+    severity: high
+    category: SNMP
+    type: line_absent
+    pattern: '^snmp-server community \S+ (view \S+ )?RW\b'
+    description: >
+      An RW community lets anyone who knows it change the configuration over
+      SNMP, which is sent in clear text for v1/v2c.
+    remediation: |
+      no snmp-server community <COMMUNITY> RW
+      ! use SNMPv3 for any write access
+    references: [CIS Cisco IOS 1.5 SNMP Rules, NIST 800-53 AC-6]
+
+  - id: IOS-019
+    title: SNMP community without an access list
+    severity: medium
+    category: SNMP
+    type: line_absent
+    pattern: '^snmp-server community \S+( view \S+)? R[OW]$'
+    description: >
+      Without an ACL, any host that knows the community string can query the
+      device.
+    remediation: |
+      ip access-list standard SNMP-ACL
+       permit <NMS-IP>
+      snmp-server community <COMMUNITY> RO SNMP-ACL
+    references: [CIS Cisco IOS 1.5 SNMP Rules, NIST 800-53 AC-3]
+
+  # ------------------------------------------------------------------ #
+  # Logging and time
+  # ------------------------------------------------------------------ #
+  - id: IOS-020
+    title: No remote syslog server configured
+    severity: low
+    category: Logging
+    type: line_present
+    pattern: '^logging (host\s+\S+|\d{1,3}(\.\d{1,3}){3})'
+    missing_message: No 'logging host' found.
+    description: >
+      Without a remote syslog server, logs are lost on reboot and cannot be
+      correlated in a SIEM during an incident.
+    remediation: |
+      logging host <SYSLOG-IP>
+      logging trap informational
+      logging source-interface <MGMT-INTERFACE>
+    references: [CIS Cisco IOS 2.2 Logging Rules, NIST 800-53 AU-6, AU-9]
+
+  - id: IOS-021
+    title: Log messages have no timestamps
+    severity: low
+    category: Logging
+    type: line_present
+    pattern: '^service timestamps log datetime'
+    missing_message: No 'service timestamps log datetime' found.
+    description: >
+      Log entries without date and time are hard to use during incident
+      investigation.
+    remediation: |
+      service timestamps log datetime msec localtime show-timezone
+    references: [CIS Cisco IOS 2.2 Logging Rules, NIST 800-53 AU-8]
+
+  - id: IOS-022
+    title: No NTP server configured
+    severity: low
+    category: Logging
+    type: line_present
+    pattern: '^ntp server\b'
+    missing_message: No 'ntp server' found.
+    description: >
+      Without NTP, device clocks drift and log timestamps cannot be trusted or
+      matched across devices.
+    remediation: |
+      ntp server <NTP-IP-1>
+      ntp server <NTP-IP-2>
+    references: [CIS Cisco IOS 2.3 NTP Rules, NIST 800-53 AU-8]
+
+  # ------------------------------------------------------------------ #
+  # Global services and hardening
+  # ------------------------------------------------------------------ #
+  - id: IOS-023
+    title: CDP is enabled globally
+    severity: low
+    category: Services
+    type: line_present
+    pattern: '^no cdp run$'
+    missing_message: CDP is enabled (no 'no cdp run' found).
+    description: >
+      CDP advertises the model, IOS version and IP addresses to neighbours.
+      Disable it globally, or at least on user-facing and Internet-facing
+      interfaces with 'no cdp enable'.
+    remediation: |
+      no cdp run
+      ! or per interface:
+      interface <EDGE-INTERFACE>
+       no cdp enable
+    references: [CIS Cisco IOS 2.1 Global Service Rules, NIST 800-53 CM-7]
+
+  - id: IOS-024
+    title: IP source routing is not disabled
+    severity: low
+    category: Services
+    type: line_present
+    pattern: '^no ip source-route$'
+    missing_message: No 'no ip source-route' found.
+    description: >
+      Source routing lets a sender choose the path of a packet, which can be
+      used to bypass security controls.
+    remediation: |
+      no ip source-route
+    references: [CIS Cisco IOS 3 Data Plane, NIST 800-53 SC-7]
+
+  - id: IOS-025
+    title: TCP keepalives for incoming sessions are not enabled
+    severity: low
+    category: Services
+    type: line_present
+    pattern: '^service tcp-keepalives-in$'
+    missing_message: No 'service tcp-keepalives-in' found.
+    description: >
+      Keepalives clean up dead or orphaned management sessions so they cannot
+      be reused and do not use up VTY lines.
+    remediation: |
+      service tcp-keepalives-in
+    references: [CIS Cisco IOS 2.1 Global Service Rules, NIST 800-53 SC-10]
+
+  # ------------------------------------------------------------------ #
+  # Layer 2 and routing
+  # ------------------------------------------------------------------ #
+  - id: IOS-026
+    title: Access ports without BPDU Guard
+    severity: medium
+    category: Layer 2
+    type: python
+    function: ios_access_ports_bpduguard
+    description: >
+      Without BPDU Guard, a user can connect a switch to an access port and
+      cause a loop or try to become the root bridge. Port-channels and their
+      members are skipped. Review the listed ports: links to servers or
+      firewalls can use BPDU Guard, but links to other switches should not.
+    remediation: |
+      spanning-tree portfast edge bpduguard default
+      ! or per interface:
+      interface <ACCESS-PORT>
+       spanning-tree portfast
+       spanning-tree bpduguard enable
+    references: [NIST 800-53 SC-5]
+
+  - id: IOS-027
+    title: DHCP snooping is not enabled
+    severity: low
+    category: Layer 2
+    type: python
+    function: ios_dhcp_snooping
+    description: >
+      Without DHCP snooping, a rogue DHCP server on an access port can hand out
+      a fake gateway and intercept traffic.
+    remediation: |
+      ip dhcp snooping
+      ip dhcp snooping vlan <USER-VLANS>
+      interface <UPLINK>
+       ip dhcp snooping trust
+    references: [NIST 800-53 SC-7]
+
+  - id: IOS-028
+    title: OSPF is running without authentication
+    severity: low
+    category: Routing
+    type: python
+    function: ios_ospf_authentication
+    description: >
+      Without authentication, any device on the segment can form an OSPF
+      adjacency and inject false routes.
+    remediation: |
+      interface <OSPF-INTERFACE>
+       ip ospf authentication message-digest
+       ip ospf message-digest-key 1 md5 <KEY>
+      ! or, on newer IOS, use a key chain with HMAC-SHA:
+       ip ospf authentication key-chain <KEY-CHAIN>
+    references: [CIS Cisco IOS 3 Data Plane (Routing Rules), NIST 800-53 SC-8]

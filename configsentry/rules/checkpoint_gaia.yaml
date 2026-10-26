@@ -1,0 +1,267 @@
+# ConfigSentry rule pack - Check Point Gaia (R80.x / R81.x)
+# Input: clish "show configuration".
+#
+# These rules check Gaia OS hardening only. The firewall rulebase lives in the
+# Management Server (SmartConsole) and is not part of 'show configuration'.
+
+platform: checkpoint_gaia
+name: Check Point Gaia
+rules:
+
+  - id: CKP-001
+    title: Telnet is enabled
+    severity: high
+    category: Management Access
+    type: line_absent
+    pattern: '^set net-access telnet on$'
+    description: >
+      Telnet sends admin credentials in clear text.
+    remediation: |
+      set net-access telnet off
+      save config
+    references: [CIS Check Point Firewall Benchmark, NIST 800-53 SC-8]
+
+  - id: CKP-002
+    title: Management allowed from any host
+    severity: high
+    category: Management Access
+    type: line_absent
+    pattern: '^add allowed-client host any-host$'
+    description: >
+      'any-host' lets every IP address reach the Gaia web portal and SSH.
+      Limit it to management networks.
+    remediation: |
+      add allowed-client network ipv4-address <MGMT-NET> mask-length <LEN>
+      delete allowed-client host any-host
+      save config
+    references: [CIS Check Point Firewall Benchmark, NIST 800-53 AC-17]
+
+  - id: CKP-003
+    title: CLI inactivity timeout longer than 15 minutes
+    severity: low
+    category: Management Access
+    type: line_value
+    pattern: '^set inactivity-timeout (\d+)'
+    default: 10
+    fail_if_greater: 15
+    description: >
+      Long idle timeouts leave unattended admin sessions open.
+    remediation: |
+      set inactivity-timeout 10
+      save config
+    references: [CIS Check Point Firewall Benchmark, NIST 800-53 AC-12]
+
+  - id: CKP-004
+    title: Web portal session timeout longer than 15 minutes
+    severity: low
+    category: Management Access
+    type: line_value
+    pattern: '^set web session-timeout (\d+)'
+    default: 10
+    fail_if_greater: 15
+    description: >
+      Long web session timeouts leave unattended admin sessions open.
+    remediation: |
+      set web session-timeout 10
+      save config
+    references: [CIS Check Point Firewall Benchmark, NIST 800-53 AC-12]
+
+  - id: CKP-005
+    title: Minimum password length is below 12
+    severity: medium
+    category: Passwords
+    type: line_value
+    pattern: '^set password-controls min-password-length (\d+)'
+    default: 6
+    fail_if_less: 12
+    description: >
+      The Gaia default minimum is 6 characters, which is easy to guess or
+      crack.
+    remediation: |
+      set password-controls min-password-length 14
+      save config
+    references: [CIS Check Point Firewall Benchmark, NIST 800-53 IA-5]
+
+  - id: CKP-006
+    title: Password complexity is below 3 character types
+    severity: low
+    category: Passwords
+    type: line_value
+    pattern: '^set password-controls complexity (\d+)'
+    default: 2
+    fail_if_less: 3
+    description: >
+      Requiring at least 3 character types makes passwords harder to guess.
+    remediation: |
+      set password-controls complexity 3
+      save config
+    references: [CIS Check Point Firewall Benchmark, NIST 800-53 IA-5]
+
+  - id: CKP-007
+    title: Account lockout after failed logins is disabled
+    severity: medium
+    category: AAA
+    type: line_value
+    pattern: '^set password-controls deny-on-fail enable (on|off)$'
+    default: "off"
+    fail_values: ["off"]
+    description: >
+      Without a lockout, accounts can be attacked with unlimited password
+      guesses.
+    remediation: |
+      set password-controls deny-on-fail enable on
+      set password-controls deny-on-fail failures-allowed 5
+      set password-controls deny-on-fail lock-period 1200
+      save config
+    references: [CIS Check Point Firewall Benchmark, NIST 800-53 AC-7]
+
+  - id: CKP-008
+    title: Password history checking is disabled
+    severity: low
+    category: Passwords
+    type: line_value
+    pattern: '^set password-controls history-checking (on|off)$'
+    default: "on"
+    fail_values: ["off"]
+    description: >
+      Without history checking, users can reuse old passwords.
+    remediation: |
+      set password-controls history-checking on
+      set password-controls history-length 12
+      save config
+    references: [CIS Check Point Firewall Benchmark, NIST 800-53 IA-5]
+
+  - id: CKP-009
+    title: Passwords never expire
+    severity: low
+    category: Passwords
+    type: line_value
+    pattern: '^set password-controls password-expiration (\S+)$'
+    default: never
+    fail_values: [never]
+    description: >
+      Many policies require admin passwords to expire, for example every 90
+      days.
+    remediation: |
+      set password-controls password-expiration 90
+      save config
+    references: [CIS Check Point Firewall Benchmark, NIST 800-53 IA-5]
+
+  - id: CKP-010
+    title: No login banner
+    severity: low
+    category: Management Access
+    type: line_present
+    pattern: '^set message banner on'
+    missing_message: The login banner is not enabled.
+    description: >
+      A warning banner states that access is restricted and monitored.
+    remediation: |
+      set message banner on msgvalue "Authorised access only. All activity is monitored and logged."
+      save config
+    references: [CIS Check Point Firewall Benchmark, NIST 800-53 AC-8]
+
+  - id: CKP-011
+    title: SNMPv1 / v2c allowed
+    severity: medium
+    category: SNMP
+    type: line_value
+    applies_if: '^set snmp agent on$'
+    pattern: '^set snmp agent-version (\S+)$'
+    default: any
+    fail_values: [any]
+    description: >
+      'agent-version any' allows SNMPv1 and v2c, which send communities in
+      clear text. Use 'v3-Only'.
+    remediation: |
+      set snmp agent-version v3-Only
+      add snmp usm user <USER> security-level authPriv auth-pass-type SHA256 auth-pass-phrase <PASS> privacy-pass-type AES256 privacy-pass-phrase <PASS>
+      save config
+    references: [CIS Check Point Firewall Benchmark, NIST 800-53 SC-8]
+
+  - id: CKP-012
+    title: Default SNMP community (public/private) in use
+    severity: high
+    category: SNMP
+    type: line_absent
+    pattern: '^add snmp community (public|private) '
+    description: >
+      'public' and 'private' are the first communities every scanner tries.
+    remediation: |
+      delete snmp community public
+      save config
+    references: [NIST 800-53 IA-5]
+
+  - id: CKP-013
+    title: SNMP read-write community configured
+    severity: high
+    category: SNMP
+    type: line_absent
+    pattern: '^add snmp community \S+ read-write$'
+    description: >
+      A read-write community lets anyone who knows it change settings over SNMP.
+    remediation: |
+      delete snmp community <COMMUNITY>
+      add snmp community <COMMUNITY> read-only
+      save config
+    references: [NIST 800-53 AC-6]
+
+  - id: CKP-014
+    title: No remote syslog server configured
+    severity: low
+    category: Logging
+    type: line_present
+    pattern: '^add syslog log-remote-address \S+'
+    missing_message: No 'syslog log-remote-address' found.
+    description: >
+      Without remote syslog, OS logs stay on the gateway and are lost if it
+      fails.
+    remediation: |
+      add syslog log-remote-address <SYSLOG-IP> level info
+      save config
+    references: [CIS Check Point Firewall Benchmark, NIST 800-53 AU-6]
+
+  - id: CKP-015
+    title: No NTP server configured
+    severity: low
+    category: Logging
+    type: line_present
+    pattern: '^add ntp server (primary|secondary) \S+'
+    missing_message: No NTP server found.
+    description: >
+      Without NTP, log timestamps cannot be trusted or matched across devices.
+    remediation: |
+      set ntp active on
+      add ntp server primary <NTP-IP> version 4
+      save config
+    references: [CIS Check Point Firewall Benchmark, NIST 800-53 AU-8]
+
+  - id: CKP-016
+    title: Admin user uses the bash shell by default
+    severity: low
+    category: AAA
+    type: line_absent
+    pattern: '^set user admin shell /bin/bash$'
+    description: >
+      Admins should land in clish, where commands are audited, and enter expert
+      mode only when needed.
+    remediation: |
+      set user admin shell /etc/cli.sh
+      save config
+    references: [CIS Check Point Firewall Benchmark, NIST 800-53 AC-6]
+
+  - id: CKP-017
+    title: MD5-based password hashes in use
+    severity: medium
+    category: Passwords
+    type: line_absent
+    pattern: '^set (user \S+ password-hash|expert-password-hash) \$1\$'
+    description: >
+      '$1$' hashes use MD5. Set the passwords again so they are stored with
+      SHA-512.
+    remediation: |
+      set password-controls password-hash-type SHA512
+      set user <USER> password
+      set expert-password
+      save config
+    references: [NIST 800-53 IA-5]

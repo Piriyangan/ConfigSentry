@@ -1,0 +1,47 @@
+: Saved
+: FAKE SAMPLE CONFIG FOR TESTING CONFIGSENTRY - NOT FROM A REAL DEVICE
+:
+ASA Version 9.18(3)
+!
+hostname LAB-ASA-02
+enable password $sha512$5000$FAKEFAKEFAKEFAKE$FAKEFAKEFAKEFAKE pbkdf2
+names
+!
+interface GigabitEthernet0/0
+ nameif outside
+ security-level 0
+ ip address 203.0.113.10 255.255.255.248
+!
+interface Management0/0
+ nameif management
+ security-level 100
+ ip address 198.51.100.1 255.255.255.0
+!
+access-list OUTSIDE_IN extended permit tcp any4 host 203.0.113.11 eq https
+access-group OUTSIDE_IN in interface outside
+!
+password-policy minimum-length 12
+username netadmin password $sha512$5000$FAKEFAKEFAKEFAKE$FAKEFAKEFAKEFAKE pbkdf2 privilege 15
+aaa authentication ssh console LOCAL
+aaa local authentication attempts max-fail 5
+!
+logging enable
+logging timestamp
+logging trap informational
+logging host management 198.51.100.20
+ntp server 198.51.100.123 source management
+!
+http server enable
+http 198.51.100.0 255.255.255.0 management
+ssh 198.51.100.0 255.255.255.0 management
+ssh version 2
+ssh timeout 10
+ssh key-exchange group dh-group14-sha256
+console timeout 10
+ssl server-version tlsv1.2
+!
+snmp-server group SNMPV3 v3 priv
+snmp-server host management 198.51.100.50 version 3 nmsuser
+!
+banner login Authorised access only. All activity is monitored and logged.
+: end

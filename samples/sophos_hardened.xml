@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- FAKE SAMPLE CONFIG FOR TESTING CONFIGSENTRY - NOT FROM A REAL DEVICE -->
+<Configuration APIVersion="2000.1" IPS_CAT_VER="1">
+  <AdminSettings transactionid="">
+    <HostnameSettings>
+      <HostName>LAB-SFW-02</HostName>
+    </HostnameSettings>
+    <LoginSecurity>
+      <LogoutSession>10</LogoutSession>
+      <BlockLogin>Enable</BlockLogin>
+      <BlockLoginSettings>
+        <UnsucceslfulAttempt>5</UnsucceslfulAttempt>
+        <Duration>60</Duration>
+        <ForMinutes>15</ForMinutes>
+      </BlockLoginSettings>
+    </LoginSecurity>
+    <PasswordComplexitySettings>
+      <PasswordComplexityCheck>Enable</PasswordComplexityCheck>
+    </PasswordComplexitySettings>
+    <LoginDisclaimer>Enable</LoginDisclaimer>
+  </AdminSettings>
+  <Zone transactionid="">
+    <Name>WAN</Name>
+    <Type>WAN</Type>
+    <ApplianceAccess>
+      <AdminServices/>
+    </ApplianceAccess>
+  </Zone>
+  <Zone transactionid="">
+    <Name>LAN</Name>
+    <Type>LAN</Type>
+    <ApplianceAccess>
+      <AdminServices>
+        <HTTPS>HTTPS</HTTPS>
+        <SSH>SSH</SSH>
+      </AdminServices>
+    </ApplianceAccess>
+  </Zone>
+  <FirewallRule transactionid="">
+    <Name>Web_Inbound</Name>
+    <Status>Enable</Status>
+    <PolicyType>Network</PolicyType>
+    <NetworkPolicy>
+      <Action>Accept</Action>
+      <LogTraffic>Enable</LogTraffic>
+      <SourceZones><Zone>WAN</Zone></SourceZones>
+      <DestinationZones><Zone>DMZ</Zone></DestinationZones>
+      <DestinationNetworks><Network>WEB-SERVER</Network></DestinationNetworks>
+      <Services><Service>HTTPS</Service></Services>
+      <IntrusionPrevention>generalpolicy</IntrusionPrevention>
+    </NetworkPolicy>
+  </FirewallRule>
+  <SNMPCommunity transactionid="">
+    <Name>R3adOnly</Name>
+    <IPAddress>198.51.100.50</IPAddress>
+    <SupportV1Protocol>Disable</SupportV1Protocol>
+    <SupportV2CProtocol>Disable</SupportV2CProtocol>
+  </SNMPCommunity>
+  <SyslogServers transactionid="">
+    <Name>SIEM</Name>
+    <IPAddress>198.51.100.20</IPAddress>
+    <Port>514</Port>
+  </SyslogServers>
+</Configuration>

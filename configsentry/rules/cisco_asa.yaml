@@ -1,0 +1,279 @@
+# ConfigSentry rule pack - Cisco ASA (9.x)
+# Input: "show running-config"
+# CIS references point to the CIS Cisco Firewall (ASA) Benchmark section.
+
+platform: cisco_asa
+name: Cisco ASA
+rules:
+
+  - id: ASA-001
+    title: Telnet management access is allowed
+    severity: high
+    category: Management Access
+    type: line_absent
+    pattern: '^telnet (?!timeout\b)\S+ \S+ \S+$'
+    description: >
+      Telnet sends usernames, passwords and commands in clear text. Use SSH
+      for CLI management.
+    remediation: |
+      no telnet <IP> <MASK> <INTERFACE>
+      ssh <MGMT-SUBNET> <MASK> <MGMT-INTERFACE>
+    references: [CIS Cisco ASA 1 Management Plane, NIST 800-53 SC-8]
+
+  - id: ASA-002
+    title: SSH or ASDM allowed from any address
+    severity: high
+    category: Management Access
+    type: line_absent
+    pattern: '^(ssh|http) (0\.0\.0\.0 0\.0\.0\.0|0 0|any4?) \S+$'
+    description: >
+      Management access is allowed from every IP address on that interface.
+      Restrict it to the management subnet or jump hosts.
+    remediation: |
+      no ssh 0.0.0.0 0.0.0.0 <INTERFACE>
+      ssh <MGMT-SUBNET> <MASK> <MGMT-INTERFACE>
+      no http 0.0.0.0 0.0.0.0 <INTERFACE>
+      http <MGMT-SUBNET> <MASK> <MGMT-INTERFACE>
+    references: [CIS Cisco ASA 1 Management Plane, NIST 800-53 AC-17]
+
+  - id: ASA-003
+    title: Management access allowed on the outside interface
+    severity: medium
+    category: Management Access
+    type: line_absent
+    pattern: '^(ssh|http|telnet) \S+ \S+ outside$'
+    description: >
+      SSH, ASDM or Telnet is reachable on the Internet-facing interface. Manage
+      the firewall from an inside or dedicated management interface, or over
+      VPN.
+    remediation: |
+      no ssh <IP> <MASK> outside
+      no http <IP> <MASK> outside
+    references: [NIST 800-53 SC-7, NIST 800-53 AC-17]
+
+  - id: ASA-004
+    title: SSH version 2 is not enforced
+    severity: medium
+    category: Management Access
+    type: line_present
+    pattern: '^ssh version 2$'
+    missing_message: No 'ssh version 2' found.
+    description: >
+      SSH version 1 has known weaknesses. On ASA 9.16 and later only SSHv2 is
+      supported, so you can ignore this finding there.
+    remediation: |
+      ssh version 2
+    references: [CIS Cisco ASA 1 Management Plane, NIST 800-53 SC-8]
+
+  - id: ASA-005
+    title: Weak SSH key exchange (DH group 1) allowed
+    severity: medium
+    category: Cryptography
+    type: line_absent
+    pattern: '^ssh key-exchange group dh-group1-sha1$'
+    description: >
+      Diffie-Hellman group 1 (768-bit) is too weak.
+    remediation: |
+      ssh key-exchange group dh-group14-sha256
+    references: [NIST 800-53 SC-13]
+
+  - id: ASA-006
+    title: Old TLS versions allowed for ASDM / SSL VPN
+    severity: medium
+    category: Cryptography
+    type: line_absent
+    pattern: '^ssl server-version (tlsv1$|tlsv1\.1|any|sslv3)'
+    description: >
+      TLS 1.0 and 1.1 are deprecated and have known weaknesses.
+    remediation: |
+      ssl server-version tlsv1.2
+    references: [NIST 800-53 SC-8, NIST SP 800-52r2]
+
+  - id: ASA-007
+    title: MD5-based password hashes ('encrypted')
+    severity: medium
+    category: Passwords
+    type: line_absent
+    pattern: '^(enable password|username \S+ password) \S+ encrypted\b'
+    description: >
+      'encrypted' passwords use an MD5-based hash, which is weak against modern
+      cracking. Re-enter them so they are stored as PBKDF2 ('pbkdf2').
+    remediation: |
+      enable password <STRONG-PASSWORD>
+      username <USER> password <STRONG-PASSWORD> privilege 15
+    references: [CIS Cisco ASA 1 Management Plane, NIST 800-53 IA-5]
+
+  - id: ASA-008
+    title: Minimum password length is below 12
+    severity: medium
+    category: Passwords
+    type: line_value
+    pattern: '^password-policy minimum-length (\d+)'
+    default: 3
+    fail_if_less: 12
+    description: >
+      Short passwords are easy to guess or crack. The ASA default minimum is 3
+      characters.
+    remediation: |
+      password-policy minimum-length 12
+      password-policy minimum-uppercase 1
+      password-policy minimum-lowercase 1
+      password-policy minimum-numeric 1
+      password-policy minimum-special 1
+    references: [NIST 800-53 IA-5]
+
+  - id: ASA-009
+    title: SSH logins do not use AAA
+    severity: medium
+    category: AAA
+    type: line_present
+    pattern: '^aaa authentication ssh console \S+'
+    missing_message: No 'aaa authentication ssh console' found.
+    description: >
+      Without AAA for SSH, the ASA cannot authenticate named users against a
+      central server or the local database.
+    remediation: |
+      aaa authentication ssh console <TACACS-GROUP> LOCAL
+      aaa authentication enable console <TACACS-GROUP> LOCAL
+      aaa accounting command <TACACS-GROUP>
+    references: [CIS Cisco ASA 1 Management Plane, NIST 800-53 AC-2]
+
+  - id: ASA-010
+    title: Local login lockout is not configured
+    severity: low
+    category: AAA
+    type: line_present
+    pattern: '^aaa local authentication attempts max-fail \d+'
+    missing_message: No 'aaa local authentication attempts max-fail' found.
+    description: >
+      Without a lockout, local accounts can be attacked with unlimited
+      password guesses.
+    remediation: |
+      aaa local authentication attempts max-fail 5
+    references: [NIST 800-53 AC-7]
+
+  - id: ASA-011
+    title: SSH session timeout longer than 15 minutes
+    severity: low
+    category: Management Access
+    type: line_value
+    pattern: '^ssh timeout (\d+)'
+    default: 5
+    fail_if_greater: 15
+    description: >
+      Long idle timeouts leave unattended admin sessions open.
+    remediation: |
+      ssh timeout 10
+    references: [NIST 800-53 AC-12]
+
+  - id: ASA-012
+    title: Console session timeout is disabled
+    severity: low
+    category: Management Access
+    type: line_value
+    pattern: '^console timeout (\d+)'
+    default: 0
+    fail_values: ["0"]
+    description: >
+      With 'console timeout 0' (the default), an open console session never
+      times out.
+    remediation: |
+      console timeout 10
+    references: [NIST 800-53 AC-12]
+
+  - id: ASA-013
+    title: No login banner
+    severity: low
+    category: Management Access
+    type: line_present
+    pattern: '^banner (login|motd|asdm) '
+    missing_message: No login, MOTD or ASDM banner found.
+    description: >
+      A warning banner states that access is restricted and monitored.
+    remediation: |
+      banner login Authorised access only. All activity is monitored and logged.
+    references: [NIST 800-53 AC-8]
+
+  - id: ASA-014
+    title: Default SNMP community (public/private) in use
+    severity: high
+    category: SNMP
+    type: line_absent
+    pattern: '^snmp-server (host .*\bcommunity|community) (public|private)\b'
+    description: >
+      'public' and 'private' are the first communities every scanner tries.
+    remediation: |
+      no snmp-server community public
+      snmp-server group SNMPV3 v3 priv
+      snmp-server user <USER> SNMPV3 v3 auth sha256 <AUTH-PASS> priv aes 256 <PRIV-PASS>
+    references: [NIST 800-53 IA-5]
+
+  - id: ASA-015
+    title: SNMPv1 or SNMPv2c in use
+    severity: medium
+    category: SNMP
+    type: line_absent
+    pattern: '^snmp-server (host .*\bversion (1|2c)\b|community \S+)'
+    description: >
+      SNMPv1 and v2c send the community string in clear text. Use SNMPv3 with
+      authentication and privacy.
+    remediation: |
+      no snmp-server community <COMMUNITY>
+      snmp-server host <INTERFACE> <NMS-IP> version 3 <USER>
+    references: [NIST 800-53 SC-8]
+
+  - id: ASA-016
+    title: Logging is disabled
+    severity: medium
+    category: Logging
+    type: line_present
+    pattern: '^logging enable$'
+    missing_message: No 'logging enable' found.
+    description: >
+      Without logging, connection and admin events are not recorded.
+    remediation: |
+      logging enable
+      logging timestamp
+      logging trap informational
+    references: [NIST 800-53 AU-2, NIST 800-53 AU-12]
+
+  - id: ASA-017
+    title: No remote syslog server configured
+    severity: low
+    category: Logging
+    type: line_present
+    pattern: '^logging host \S+ \S+'
+    missing_message: No 'logging host' found.
+    description: >
+      Without a remote syslog server, logs are lost when the buffer wraps and
+      cannot be correlated in a SIEM.
+    remediation: |
+      logging host <INTERFACE> <SYSLOG-IP>
+    references: [NIST 800-53 AU-6, NIST 800-53 AU-9]
+
+  - id: ASA-018
+    title: No NTP server configured
+    severity: low
+    category: Logging
+    type: line_present
+    pattern: '^ntp server '
+    missing_message: No 'ntp server' found.
+    description: >
+      Without NTP, log timestamps cannot be trusted or matched across devices.
+    remediation: |
+      ntp server <NTP-IP> source <INTERFACE>
+    references: [NIST 800-53 AU-8]
+
+  - id: ASA-019
+    title: Access list permits any IP to any destination
+    severity: high
+    category: Firewall Policy
+    type: line_absent
+    pattern: '^access-list \S+ (extended )?permit ip any[46]? any[46]?\b'
+    description: >
+      An 'permit ip any any' entry gives no real filtering for the traffic it
+      matches.
+    remediation: |
+      no access-list <ACL> extended permit ip any any
+      access-list <ACL> extended permit tcp <SOURCE> <DESTINATION> eq <PORT>
+    references: [NIST 800-53 AC-4, NIST 800-53 SC-7]

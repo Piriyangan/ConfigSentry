@@ -1,0 +1,26 @@
+# FAKE SAMPLE CONFIG FOR TESTING CONFIGSENTRY - NOT FROM A REAL DEVICE
+set mgt-config users netadmin phash $5$FAKEFAKE$FAKEFAKEFAKEFAKEFAKEFAKE
+set mgt-config users netadmin permissions role-based superuser yes
+set mgt-config password-complexity enabled yes
+set mgt-config password-complexity minimum-length 12
+set deviceconfig system hostname LAB-PA-02
+set deviceconfig system service disable-telnet yes
+set deviceconfig system service disable-http yes
+set deviceconfig system permitted-ip 198.51.100.0/24
+set deviceconfig system login-banner "Authorised access only. All activity is monitored and logged."
+set deviceconfig system server-verification yes
+set deviceconfig system ntp-servers primary-ntp-server ntp-server-address 198.51.100.123
+set deviceconfig system snmp-setting access-setting version v3 views RO view ALL oid 1.3.6.1
+set deviceconfig setting management idle-timeout 10
+set deviceconfig setting management admin-lockout failed-attempts 5 lockout-time 15
+set shared log-settings syslog SIEM server SIEM-01 server 198.51.100.20
+set network profiles interface-management-profile ping-only ping yes
+set rulebase security rules "Web Inbound" from untrust
+set rulebase security rules "Web Inbound" to dmz
+set rulebase security rules "Web Inbound" source any
+set rulebase security rules "Web Inbound" destination WEB-SERVER
+set rulebase security rules "Web Inbound" application [ ssl web-browsing ]
+set rulebase security rules "Web Inbound" service application-default
+set rulebase security rules "Web Inbound" action allow
+set rulebase security rules "Web Inbound" profile-setting group default
+set rulebase security rules "Web Inbound" log-end yes

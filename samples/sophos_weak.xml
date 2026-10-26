@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- FAKE SAMPLE CONFIG FOR TESTING CONFIGSENTRY - NOT FROM A REAL DEVICE -->
+<Configuration APIVersion="2000.1" IPS_CAT_VER="1">
+  <AdminSettings transactionid="">
+    <HostnameSettings>
+      <HostName>LAB-SFW-01</HostName>
+    </HostnameSettings>
+    <LoginSecurity>
+      <LogoutSession>Disable</LogoutSession>
+      <BlockLogin>Disable</BlockLogin>
+    </LoginSecurity>
+    <PasswordComplexitySettings>
+      <PasswordComplexityCheck>Disable</PasswordComplexityCheck>
+    </PasswordComplexitySettings>
+    <LoginDisclaimer>Disable</LoginDisclaimer>
+  </AdminSettings>
+  <Zone transactionid="">
+    <Name>WAN</Name>
+    <Type>WAN</Type>
+    <ApplianceAccess>
+      <AdminServices>
+        <HTTPS>HTTPS</HTTPS>
+        <SSH>SSH</SSH>
+      </AdminServices>
+    </ApplianceAccess>
+  </Zone>
+  <Zone transactionid="">
+    <Name>LAN</Name>
+    <Type>LAN</Type>
+    <ApplianceAccess>
+      <AdminServices>
+        <HTTPS>HTTPS</HTTPS>
+        <SSH>SSH</SSH>
+      </AdminServices>
+    </ApplianceAccess>
+  </Zone>
+  <FirewallRule transactionid="">
+    <Name>Allow_All</Name>
+    <Status>Enable</Status>
+    <PolicyType>Network</PolicyType>
+    <NetworkPolicy>
+      <Action>Accept</Action>
+      <LogTraffic>Disable</LogTraffic>
+      <SourceZones><Zone>LAN</Zone></SourceZones>
+      <DestinationZones><Zone>WAN</Zone></DestinationZones>
+    </NetworkPolicy>
+  </FirewallRule>
+  <FirewallRule transactionid="">
+    <Name>Web_Inbound</Name>
+    <Status>Enable</Status>
+    <PolicyType>Network</PolicyType>
+    <NetworkPolicy>
+      <Action>Accept</Action>
+      <LogTraffic>Enable</LogTraffic>
+      <SourceZones><Zone>WAN</Zone></SourceZones>
+      <DestinationZones><Zone>DMZ</Zone></DestinationZones>
+      <DestinationNetworks><Network>WEB-SERVER</Network></DestinationNetworks>
+      <IntrusionPrevention>None</IntrusionPrevention>
+    </NetworkPolicy>
+  </FirewallRule>
+  <SNMPCommunity transactionid="">
+    <Name>public</Name>
+    <IPAddress>192.0.2.50</IPAddress>
+    <SupportV1Protocol>Enable</SupportV1Protocol>
+    <SupportV2CProtocol>Enable</SupportV2CProtocol>
+  </SNMPCommunity>
+</Configuration>

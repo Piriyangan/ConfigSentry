@@ -1,0 +1,375 @@
+# ConfigSentry rule pack - FortiGate (FortiOS 6.4 / 7.x)
+#
+# FortiGate "show" only prints settings that differ from the default.
+# fgt_setting rules therefore include the FortiOS default value, which is
+# used when a setting is not shown. For best results, paste the FULL
+# configuration ("show" or "show full-configuration"), not one section.
+#
+# CIS FortiGate Benchmark mapping is planned - contributions welcome.
+
+platform: fortigate
+name: FortiGate (FortiOS)
+rules:
+
+  # ------------------------------------------------------------------ #
+  # Administrative access
+  # ------------------------------------------------------------------ #
+  - id: FGT-001
+    title: HTTP or Telnet admin access enabled on an interface
+    severity: high
+    category: Management Access
+    type: python
+    function: fgt_insecure_admin_protocols
+    description: >
+      HTTP and Telnet send admin credentials and sessions in clear text.
+      Only HTTPS and SSH should be used for management.
+    remediation: |
+      config system interface
+          edit "<INTERFACE>"
+              set allowaccess ping https ssh
+          next
+      end
+    references: [NIST 800-53 SC-8, NIST 800-53 CM-7]
+
+  - id: FGT-002
+    title: Administrative access allowed on a WAN interface
+    severity: high
+    category: Management Access
+    type: python
+    function: fgt_wan_admin_access
+    description: >
+      Exposing HTTPS, SSH, HTTP, Telnet or SNMP admin access to the Internet
+      invites brute-force attacks and exploitation of FortiOS management
+      vulnerabilities. Manage the firewall from an internal or dedicated
+      management interface, or over VPN.
+    remediation: |
+      config system interface
+          edit "<WAN-INTERFACE>"
+              set allowaccess ping
+          next
+      end
+    references: [NIST 800-53 AC-17, NIST 800-53 SC-7]
+
+  - id: FGT-003
+    title: Administrator account without trusted hosts
+    severity: high
+    category: Management Access
+    type: python
+    function: fgt_admin_trusted_hosts
+    description: >
+      Without trusted hosts, an administrator can log in from any IP address.
+      Trusted hosts limit admin logins to known management networks.
+    remediation: |
+      config system admin
+          edit "<ADMIN>"
+              set trusthost1 <MGMT-SUBNET> <MASK>
+          next
+      end
+    references: [NIST 800-53 AC-17, NIST 800-53 AC-3]
+
+  - id: FGT-004
+    title: Default 'admin' account still in use
+    severity: low
+    category: Management Access
+    type: python
+    function: fgt_default_admin_name
+    description: >
+      'admin' is the first username attackers try. Create named admin
+      accounts and remove or rename the default one.
+    remediation: |
+      config system admin
+          edit "<NAMED-ADMIN>"
+              set accprofile "super_admin"
+              set password <STRONG-PASSWORD>
+              set trusthost1 <MGMT-SUBNET> <MASK>
+          next
+      end
+      # log in as the new admin, then:
+      config system admin
+          delete "admin"
+      end
+    references: [NIST 800-53 AC-2, NIST 800-53 IA-2]
+
+  - id: FGT-005
+    title: Admin idle timeout is longer than 15 minutes
+    severity: low
+    category: Management Access
+    type: fgt_setting
+    section: system global
+    settings:
+      - key: admintimeout
+        default: 5
+        fail_if_greater: 15
+    description: >
+      Long idle timeouts leave unattended admin sessions open.
+    remediation: |
+      config system global
+          set admintimeout 10
+      end
+    references: [NIST 800-53 AC-12]
+
+  - id: FGT-006
+    title: Admin lockout threshold is too high
+    severity: low
+    category: Management Access
+    type: fgt_setting
+    section: system global
+    settings:
+      - key: admin-lockout-threshold
+        default: 3
+        fail_if_greater: 5
+    description: >
+      A high lockout threshold allows more password guesses before the source
+      is blocked.
+    remediation: |
+      config system global
+          set admin-lockout-threshold 3
+          set admin-lockout-duration 300
+      end
+    references: [NIST 800-53 AC-7]
+
+  - id: FGT-007
+    title: Password policy for administrators is disabled
+    severity: medium
+    category: Passwords
+    type: fgt_setting
+    section: system password-policy
+    settings:
+      - key: status
+        default: disable
+        fail_values: [disable]
+    description: >
+      Without a password policy, administrators can set short or simple
+      passwords.
+    remediation: |
+      config system password-policy
+          set status enable
+          set apply-to admin-password ipsec-preshared-key
+          set minimum-length 12
+          set min-upper-case-letter 1
+          set min-lower-case-letter 1
+          set min-number 1
+          set min-non-alphanumeric 1
+          set expire-status enable
+          set expire-day 90
+      end
+    references: [NIST 800-53 IA-5]
+
+  - id: FGT-008
+    title: Maintainer account is enabled
+    severity: medium
+    category: Management Access
+    type: fgt_setting
+    section: system global
+    settings:
+      - key: admin-maintainer
+        default: enable
+        fail_values: [enable]
+    description: >
+      The 'maintainer' account lets someone with console access reset the
+      admin password after a reboot. Disable it where physical security
+      cannot be guaranteed (keep a documented recovery process).
+    remediation: |
+      config system global
+          set admin-maintainer disable
+      end
+    references: [NIST 800-53 AC-2]
+
+  - id: FGT-009
+    title: No pre-login warning banner
+    severity: low
+    category: Management Access
+    type: fgt_setting
+    section: system global
+    settings:
+      - key: pre-login-banner
+        default: disable
+        fail_values: [disable]
+    description: >
+      A pre-login banner states that access is restricted and monitored.
+    remediation: |
+      config system global
+          set pre-login-banner enable
+      end
+    references: [NIST 800-53 AC-8]
+
+  # ------------------------------------------------------------------ #
+  # Cryptography
+  # ------------------------------------------------------------------ #
+  - id: FGT-010
+    title: Strong crypto is disabled
+    severity: high
+    category: Cryptography
+    type: fgt_setting
+    section: system global
+    settings:
+      - key: strong-crypto
+        default: enable
+        fail_values: [disable]
+    description: >
+      With strong-crypto disabled, weak ciphers and protocols can be used for
+      HTTPS and SSH management sessions.
+    remediation: |
+      config system global
+          set strong-crypto enable
+      end
+    references: [NIST 800-53 SC-13]
+
+  - id: FGT-011
+    title: Old TLS versions allowed for admin HTTPS
+    severity: medium
+    category: Cryptography
+    type: fgt_setting
+    section: system global
+    settings:
+      - key: admin-https-ssl-versions
+        default: tlsv1-2 tlsv1-3
+        fail_if_contains: [tlsv1-0, tlsv1-1, sslv3]
+    description: >
+      TLS 1.0 and 1.1 are deprecated and have known weaknesses.
+    remediation: |
+      config system global
+          set admin-https-ssl-versions tlsv1-2 tlsv1-3
+      end
+    references: [NIST 800-53 SC-8, NIST SP 800-52r2]
+
+  - id: FGT-012
+    title: SSH version 1 enabled for administration
+    severity: high
+    category: Cryptography
+    type: fgt_setting
+    section: system global
+    settings:
+      - key: admin-ssh-v1
+        default: disable
+        fail_values: [enable]
+    description: >
+      SSH version 1 has known cryptographic weaknesses (older FortiOS only).
+    remediation: |
+      config system global
+          set admin-ssh-v1 disable
+      end
+    references: [NIST 800-53 SC-8]
+
+  # ------------------------------------------------------------------ #
+  # Firewall policy
+  # ------------------------------------------------------------------ #
+  - id: FGT-013
+    title: Policy allows any source, any destination, any service
+    severity: high
+    category: Firewall Policy
+    type: python
+    function: fgt_policy_any_any
+    description: >
+      An accept policy with srcaddr all, dstaddr all and service ALL gives no
+      real filtering between the zones it connects.
+    remediation: |
+      config firewall policy
+          edit <POLICY-ID>
+              set srcaddr "<SOURCE-GROUP>"
+              set dstaddr "<DESTINATION-GROUP>"
+              set service "<REQUIRED-SERVICES>"
+          next
+      end
+    references: [NIST 800-53 AC-4, NIST 800-53 SC-7]
+
+  - id: FGT-014
+    title: Policy allows all services (service ALL)
+    severity: medium
+    category: Firewall Policy
+    type: python
+    function: fgt_policy_service_all
+    description: >
+      Allowing every port and protocol breaks least privilege. Allow only the
+      services the application needs.
+    remediation: |
+      config firewall policy
+          edit <POLICY-ID>
+              set service "HTTPS" "DNS"
+          next
+      end
+    references: [NIST 800-53 AC-4, NIST 800-53 CM-7]
+
+  - id: FGT-015
+    title: Accept policy with traffic logging disabled
+    severity: medium
+    category: Logging
+    type: python
+    function: fgt_policy_logging
+    description: >
+      Without traffic logs, you cannot investigate incidents or prove what was
+      allowed through the firewall.
+    remediation: |
+      config firewall policy
+          edit <POLICY-ID>
+              set logtraffic all
+          next
+      end
+    references: [NIST 800-53 AU-2, NIST 800-53 AU-12]
+
+  # ------------------------------------------------------------------ #
+  # SNMP and logging
+  # ------------------------------------------------------------------ #
+  - id: FGT-016
+    title: Default SNMP community name (public/private)
+    severity: high
+    category: SNMP
+    type: python
+    function: fgt_snmp_default_community
+    description: >
+      'public' and 'private' are the first communities every scanner tries.
+    remediation: |
+      config system snmp community
+          edit <ID>
+              set name "<UNIQUE-COMMUNITY>"
+          next
+      end
+      # better: use SNMPv3 (config system snmp user) with auth and priv
+    references: [NIST 800-53 IA-5]
+
+  - id: FGT-017
+    title: No remote log destination enabled
+    severity: low
+    category: Logging
+    type: python
+    function: fgt_remote_logging
+    description: >
+      Without syslog or FortiAnalyzer, logs stay on the device only and may be
+      lost or overwritten.
+    remediation: |
+      config log syslogd setting
+          set status enable
+          set server "<SYSLOG-IP>"
+      end
+      # or
+      config log fortianalyzer setting
+          set status enable
+          set server "<FAZ-IP>"
+      end
+    references: [NIST 800-53 AU-6, NIST 800-53 AU-9]
+
+  # ------------------------------------------------------------------ #
+  # System
+  # ------------------------------------------------------------------ #
+  - id: FGT-018
+    title: USB auto-install of config or firmware is enabled
+    severity: low
+    category: System
+    type: fgt_setting
+    section: system auto-install
+    settings:
+      - key: auto-install-config
+        default: enable
+        fail_values: [enable]
+      - key: auto-install-image
+        default: enable
+        fail_values: [enable]
+    description: >
+      With auto-install enabled, anyone who can reboot the unit with a USB
+      drive inserted can load a new configuration or firmware.
+    remediation: |
+      config system auto-install
+          set auto-install-config disable
+          set auto-install-image disable
+      end
+    references: [NIST 800-53 CM-5]

@@ -1,0 +1,259 @@
+# ConfigSentry rule pack - Palo Alto PAN-OS (firewalls, 9.x / 10.x / 11.x)
+# Input (any of):
+#   - XML: Device > Setup > Operations > Export named configuration snapshot
+#   - CLI set format:  set cli config-output-format set ; show config running
+#   - CLI default { } format: show config running
+# CIS references name the CIS Palo Alto Firewall Benchmark; check the recommendation number for your version.
+
+platform: paloalto
+name: Palo Alto PAN-OS
+rules:
+
+  - id: PAN-001
+    title: Telnet enabled on the management interface
+    severity: high
+    category: Management Access
+    type: line_absent
+    pattern: '\bdeviceconfig system service disable-telnet no\b'
+    description: >
+      Telnet sends admin credentials in clear text.
+    remediation: |
+      set deviceconfig system service disable-telnet yes
+    references: [CIS Palo Alto Firewall Benchmark, NIST 800-53 SC-8]
+
+  - id: PAN-002
+    title: HTTP enabled on the management interface
+    severity: high
+    category: Management Access
+    type: line_absent
+    pattern: '\bdeviceconfig system service disable-http no\b'
+    description: >
+      HTTP sends web admin credentials in clear text. Use HTTPS only.
+    remediation: |
+      set deviceconfig system service disable-http yes
+    references: [CIS Palo Alto Firewall Benchmark, NIST 800-53 SC-8]
+
+  - id: PAN-003
+    title: Management interface not restricted by permitted IPs
+    severity: medium
+    category: Management Access
+    type: line_present
+    pattern: '\bdeviceconfig system permitted-ip \S+'
+    missing_message: No 'permitted-ip' entries on the management interface.
+    description: >
+      Without permitted IPs, the management interface accepts connections from
+      any address.
+    remediation: |
+      set deviceconfig system permitted-ip <MGMT-SUBNET>
+    references: [CIS Palo Alto Firewall Benchmark, NIST 800-53 AC-17]
+
+  - id: PAN-004
+    title: Interface management profile allows HTTP or Telnet
+    severity: high
+    category: Management Access
+    type: line_absent
+    pattern: '\bnetwork profiles interface-management-profile \S+ (http|telnet) yes\b'
+    description: >
+      A management profile on a data interface allows clear-text admin access.
+    remediation: |
+      set network profiles interface-management-profile <PROFILE> http no
+      set network profiles interface-management-profile <PROFILE> telnet no
+    references: [CIS Palo Alto Firewall Benchmark, NIST 800-53 SC-8]
+
+  - id: PAN-005
+    title: Admin idle timeout is longer than 15 minutes
+    severity: low
+    category: Management Access
+    type: line_value
+    pattern: '\bdeviceconfig setting management idle-timeout (\d+)'
+    default: 60
+    fail_if_greater: 15
+    fail_values: ["0"]
+    description: >
+      The PAN-OS default idle timeout is 60 minutes. Long timeouts leave
+      unattended admin sessions open.
+    remediation: |
+      set deviceconfig setting management idle-timeout 10
+    references: [CIS Palo Alto Firewall Benchmark, NIST 800-53 AC-12]
+
+  - id: PAN-006
+    title: Admin lockout is not configured
+    severity: medium
+    category: AAA
+    type: line_present
+    pattern: '\bdeviceconfig setting management admin-lockout failed-attempts [1-9]'
+    missing_message: No 'admin-lockout failed-attempts' setting found.
+    description: >
+      Without a lockout, admin accounts can be attacked with unlimited
+      password guesses.
+    remediation: |
+      set deviceconfig setting management admin-lockout failed-attempts 5 lockout-time 15
+    references: [CIS Palo Alto Firewall Benchmark, NIST 800-53 AC-7]
+
+  - id: PAN-007
+    title: Password complexity is not enabled
+    severity: medium
+    category: Passwords
+    type: line_present
+    pattern: '\bmgt-config password-complexity enabled yes\b'
+    missing_message: Password complexity is not enabled.
+    description: >
+      Without password complexity, admins can set short or simple passwords.
+    remediation: |
+      set mgt-config password-complexity enabled yes
+      set mgt-config password-complexity minimum-length 12
+      set mgt-config password-complexity minimum-uppercase-letters 1
+      set mgt-config password-complexity minimum-lowercase-letters 1
+      set mgt-config password-complexity minimum-numeric-letters 1
+      set mgt-config password-complexity minimum-special-characters 1
+    references: [CIS Palo Alto Firewall Benchmark, NIST 800-53 IA-5]
+
+  - id: PAN-008
+    title: Default 'admin' account still exists
+    severity: low
+    category: AAA
+    type: line_absent
+    pattern: '\bmgt-config users admin\b'
+    description: >
+      'admin' is the first username attackers try. Create named admin accounts
+      and remove the default one.
+    remediation: |
+      set mgt-config users <NAMED-ADMIN> permissions role-based superuser yes
+      set mgt-config users <NAMED-ADMIN> password
+      delete mgt-config users admin
+    references: [NIST 800-53 AC-2]
+
+  - id: PAN-009
+    title: No login banner
+    severity: low
+    category: Management Access
+    type: line_present
+    pattern: '\bdeviceconfig system login-banner \S+'
+    missing_message: No 'login-banner' found.
+    description: >
+      A warning banner states that access is restricted and monitored.
+    remediation: |
+      set deviceconfig system login-banner "Authorised access only. All activity is monitored and logged."
+    references: [CIS Palo Alto Firewall Benchmark, NIST 800-53 AC-8]
+
+  - id: PAN-010
+    title: Update server identity is not verified
+    severity: low
+    category: System
+    type: line_present
+    pattern: '\bdeviceconfig system server-verification yes\b'
+    missing_message: '''server-verification'' is not enabled.'
+    description: >
+      Without server verification, the firewall does not check the certificate
+      of the Palo Alto update server, so updates could be spoofed.
+    remediation: |
+      set deviceconfig system server-verification yes
+    references: [CIS Palo Alto Firewall Benchmark, NIST 800-53 SI-7]
+
+  - id: PAN-011
+    title: SNMPv2c in use
+    severity: medium
+    category: SNMP
+    type: line_absent
+    pattern: '\bsnmp-setting access-setting version v2c\b'
+    description: >
+      SNMPv2c sends the community string in clear text. Use SNMPv3.
+    remediation: |
+      delete deviceconfig system snmp-setting access-setting version v2c
+      set deviceconfig system snmp-setting access-setting version v3 views <VIEW>
+    references: [CIS Palo Alto Firewall Benchmark, NIST 800-53 SC-8]
+
+  - id: PAN-012
+    title: Default SNMP community (public/private) in use
+    severity: high
+    category: SNMP
+    type: line_absent
+    pattern: '\bsnmp-community-string "?(public|private)"?( |$)'
+    description: >
+      'public' and 'private' are the first communities every scanner tries.
+    remediation: |
+      set deviceconfig system snmp-setting access-setting version v2c snmp-community-string <UNIQUE-COMMUNITY>
+    references: [NIST 800-53 IA-5]
+
+  - id: PAN-013
+    title: No syslog server profile configured
+    severity: low
+    category: Logging
+    type: line_present
+    pattern: '\blog-settings syslog \S+ server '
+    missing_message: No syslog server profile found.
+    description: >
+      Without syslog forwarding, logs stay on the firewall and cannot be
+      correlated in a SIEM.
+    remediation: |
+      set shared log-settings syslog <PROFILE> server <NAME> server <SYSLOG-IP>
+    references: [CIS Palo Alto Firewall Benchmark, NIST 800-53 AU-6]
+
+  - id: PAN-014
+    title: No NTP server configured
+    severity: low
+    category: Logging
+    type: line_present
+    pattern: '\bdeviceconfig system ntp-servers \S+ ntp-server-address \S+'
+    missing_message: No NTP server found.
+    description: >
+      Without NTP, log timestamps cannot be trusted or matched across devices.
+    remediation: |
+      set deviceconfig system ntp-servers primary-ntp-server ntp-server-address <NTP-IP>
+    references: [NIST 800-53 AU-8]
+
+  - id: PAN-015
+    title: Rule allows any source, destination, application and service
+    severity: high
+    category: Firewall Policy
+    type: python
+    function: pan_any_any
+    description: >
+      An allow rule with any/any/any/any gives no real filtering for the zones
+      it connects.
+    remediation: |
+      set rulebase security rules <RULE> source <SOURCE>
+      set rulebase security rules <RULE> destination <DESTINATION>
+      set rulebase security rules <RULE> application <APP>
+      set rulebase security rules <RULE> service application-default
+    references: [CIS Palo Alto Firewall Benchmark, NIST 800-53 AC-4]
+
+  - id: PAN-016
+    title: Rule allows application any with service any
+    severity: medium
+    category: Firewall Policy
+    type: python
+    function: pan_app_service_any
+    description: >
+      Allowing every application on every port breaks least privilege and
+      misses the benefit of App-ID.
+    remediation: |
+      set rulebase security rules <RULE> application <APP>
+      set rulebase security rules <RULE> service application-default
+    references: [CIS Palo Alto Firewall Benchmark, NIST 800-53 AC-4]
+
+  - id: PAN-017
+    title: Allow rule without session-end logging
+    severity: medium
+    category: Logging
+    type: python
+    function: pan_log_end
+    description: >
+      Without log-end, there is no traffic log for the sessions this rule
+      allows.
+    remediation: |
+      set rulebase security rules <RULE> log-end yes
+    references: [CIS Palo Alto Firewall Benchmark, NIST 800-53 AU-12]
+
+  - id: PAN-018
+    title: Allow rule without security profiles
+    severity: low
+    category: Firewall Policy
+    type: python
+    function: pan_no_profile
+    description: >
+      Without antivirus, vulnerability, anti-spyware or URL profiles, allowed
+      traffic is not inspected for threats.
+    remediation: |
+      set rulebase security rules <RULE> profile-setting group <PROFILE-GROUP>
+    references: [CIS Palo Alto Firewall Benchmark, NIST 800-53 SI-3]

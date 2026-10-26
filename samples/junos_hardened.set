@@ -1,0 +1,31 @@
+## FAKE SAMPLE CONFIG FOR TESTING CONFIGSENTRY - NOT FROM A REAL DEVICE
+set version 22.4R2
+set system host-name LAB-SRX-02
+set system root-authentication encrypted-password "$6$FAKE$FAKEFAKEFAKEFAKEFAKEFAKE"
+set system login class ADMIN idle-timeout 10
+set system login class ADMIN permissions all
+set system login user netops class ADMIN
+set system login user netops authentication encrypted-password "$6$FAKE$FAKEFAKEFAKEFAKE"
+set system login retry-options tries-before-disconnect 3
+set system login retry-options lockout-period 10
+set system login message "Authorised access only. All activity is monitored and logged."
+set system services ssh root-login deny
+set system services ssh protocol-version v2
+set system services ssh ciphers aes256-ctr
+set system services ssh ciphers aes256-gcm@openssh.com
+set system services web-management https system-generated-certificate
+set system syslog host 198.51.100.20 any info
+set system ntp server 198.51.100.123
+set system ports console log-out-on-disconnect
+set firewall family inet filter PROTECT-RE term MGMT from source-address 198.51.100.0/24
+set firewall family inet filter PROTECT-RE term MGMT then accept
+set firewall family inet filter PROTECT-RE term DENY then discard
+set interfaces lo0 unit 0 family inet filter input PROTECT-RE
+set security policies from-zone untrust to-zone dmz policy WEB match source-address any
+set security policies from-zone untrust to-zone dmz policy WEB match destination-address WEB-SERVER
+set security policies from-zone untrust to-zone dmz policy WEB match application junos-https
+set security policies from-zone untrust to-zone dmz policy WEB then permit
+set security policies from-zone untrust to-zone dmz policy WEB then log session-close
+set protocols ospf area 0.0.0.0 interface ge-0/0/1.0 authentication md5 1 key "$9$FAKEFAKE"
+set snmp community R3adOnly authorization read-only
+set snmp community R3adOnly clients 198.51.100.50/32

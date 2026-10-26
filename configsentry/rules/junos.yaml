@@ -1,0 +1,280 @@
+# ConfigSentry rule pack - Juniper Junos (EX / QFX / MX / SRX)
+# Input: "show configuration | display set" (recommended) or the default { } format.
+# CIS references name the CIS Juniper OS Benchmark; check the recommendation number for your version.
+
+platform: junos
+name: Juniper Junos
+rules:
+
+  - id: JUN-001
+    title: Telnet service is enabled
+    severity: high
+    category: Management Access
+    type: line_absent
+    pattern: '^set system services telnet\b'
+    description: >
+      Telnet sends usernames, passwords and commands in clear text.
+    remediation: |
+      delete system services telnet
+    references: [CIS Juniper OS Benchmark, NIST 800-53 SC-8]
+
+  - id: JUN-002
+    title: FTP service is enabled
+    severity: medium
+    category: Services
+    type: line_absent
+    pattern: '^set system services ftp\b'
+    description: >
+      FTP sends credentials and files in clear text. Use SCP or SFTP over SSH.
+    remediation: |
+      delete system services ftp
+    references: [CIS Juniper OS Benchmark, NIST 800-53 CM-7]
+
+  - id: JUN-003
+    title: Web management over clear-text HTTP is enabled
+    severity: medium
+    category: Management Access
+    type: line_absent
+    pattern: '^set system services web-management http\b'
+    description: >
+      J-Web over HTTP sends credentials in clear text. Use HTTPS only.
+    remediation: |
+      delete system services web-management http
+      set system services web-management https system-generated-certificate
+    references: [NIST 800-53 SC-8]
+
+  - id: JUN-004
+    title: SSH root login is allowed
+    severity: high
+    category: Management Access
+    type: line_absent
+    pattern: '^set system services ssh root-login allow\b'
+    description: >
+      Admins should log in with named accounts. Direct root login over SSH
+      removes accountability and is a common brute-force target.
+    remediation: |
+      set system services ssh root-login deny
+    references: [CIS Juniper OS Benchmark, NIST 800-53 AC-6]
+
+  - id: JUN-005
+    title: SSH protocol version 1 allowed
+    severity: high
+    category: Cryptography
+    type: line_absent
+    pattern: '^set system services ssh protocol-version v1\b'
+    description: >
+      SSH version 1 has known cryptographic weaknesses.
+    remediation: |
+      delete system services ssh protocol-version v1
+      set system services ssh protocol-version v2
+    references: [NIST 800-53 SC-8]
+
+  - id: JUN-006
+    title: Weak SSH ciphers allowed
+    severity: medium
+    category: Cryptography
+    type: line_absent
+    pattern: '^set system services ssh ciphers .*\b(3des-cbc|blowfish-cbc|arcfour\S*|cast128-cbc|aes(128|192|256)-cbc)\b'
+    description: >
+      CBC-mode, 3DES, Blowfish and RC4 (arcfour) ciphers are weak. Use AES in
+      CTR or GCM mode.
+    remediation: |
+      delete system services ssh ciphers
+      set system services ssh ciphers aes256-ctr
+      set system services ssh ciphers aes256-gcm@openssh.com
+    references: [NIST 800-53 SC-13]
+
+  - id: JUN-007
+    title: MD5-based password hashes in use
+    severity: medium
+    category: Passwords
+    type: line_absent
+    pattern: 'encrypted-password "?\$1\$'
+    description: >
+      '$1$' hashes use MD5, which is weak against modern cracking. Re-enter the
+      passwords so they are stored as SHA-512 ('$6$').
+    remediation: |
+      set system login password format sha512
+      set system root-authentication plain-text-password
+      set system login user <USER> authentication plain-text-password
+    references: [CIS Juniper OS Benchmark, NIST 800-53 IA-5]
+
+  - id: JUN-008
+    title: Login retry options (lockout) are not set
+    severity: low
+    category: AAA
+    type: line_present
+    pattern: '^set system login retry-options '
+    missing_message: No 'system login retry-options' found.
+    description: >
+      Retry options slow down and lock out repeated failed logins.
+    remediation: |
+      set system login retry-options tries-before-disconnect 3
+      set system login retry-options backoff-threshold 1
+      set system login retry-options lockout-period 10
+    references: [CIS Juniper OS Benchmark, NIST 800-53 AC-7]
+
+  - id: JUN-009
+    title: No idle timeout for login classes
+    severity: low
+    category: Management Access
+    type: line_present
+    pattern: '^set system login class \S+ idle-timeout \d+'
+    missing_message: No login class with 'idle-timeout' found.
+    description: >
+      Without an idle timeout, admin sessions stay open forever.
+    remediation: |
+      set system login class <CLASS> idle-timeout 10
+    references: [NIST 800-53 AC-12]
+
+  - id: JUN-010
+    title: No login banner
+    severity: low
+    category: Management Access
+    type: line_present
+    pattern: '^set system login (message|announcement) '
+    missing_message: No 'system login message' found.
+    description: >
+      A warning banner states that access is restricted and monitored.
+    remediation: |
+      set system login message "Authorised access only. All activity is monitored and logged."
+    references: [NIST 800-53 AC-8]
+
+  - id: JUN-011
+    title: Console session not logged out on disconnect
+    severity: low
+    category: Management Access
+    type: line_present
+    pattern: '^set system ports console log-out-on-disconnect\b'
+    missing_message: No 'system ports console log-out-on-disconnect' found.
+    description: >
+      If the console cable is unplugged, the session stays logged in for the
+      next person who connects.
+    remediation: |
+      set system ports console log-out-on-disconnect
+    references: [CIS Juniper OS Benchmark, NIST 800-53 AC-12]
+
+  - id: JUN-012
+    title: No firewall filter protecting the Routing Engine (lo0)
+    severity: medium
+    category: Management Access
+    type: line_present
+    pattern: '^set interfaces lo0 unit 0 family inet filter input '
+    missing_message: No input filter on interface lo0.
+    description: >
+      A lo0 input filter limits which hosts and protocols can reach the
+      control and management plane.
+    remediation: |
+      set firewall family inet filter PROTECT-RE term MGMT from source-address <MGMT-SUBNET>
+      set firewall family inet filter PROTECT-RE term MGMT then accept
+      set firewall family inet filter PROTECT-RE term DENY then discard
+      set interfaces lo0 unit 0 family inet filter input PROTECT-RE
+    references: [NIST 800-53 SC-7, NIST 800-53 AC-17]
+
+  - id: JUN-013
+    title: Default SNMP community (public/private) in use
+    severity: high
+    category: SNMP
+    type: line_absent
+    pattern: '^set snmp community "?(public|private)"?( |$)'
+    description: >
+      'public' and 'private' are the first communities every scanner tries.
+    remediation: |
+      delete snmp community public
+      set snmp v3 usm local-engine user <USER> authentication-sha256 authentication-password <PASS>
+    references: [CIS Juniper OS Benchmark, NIST 800-53 IA-5]
+
+  - id: JUN-014
+    title: SNMP read-write community configured
+    severity: high
+    category: SNMP
+    type: line_absent
+    pattern: '^set snmp community \S+ authorization read-write\b'
+    description: >
+      A read-write community lets anyone who knows it change the configuration
+      over SNMP.
+    remediation: |
+      set snmp community <COMMUNITY> authorization read-only
+    references: [CIS Juniper OS Benchmark, NIST 800-53 AC-6]
+
+  - id: JUN-015
+    title: SNMP community without client restrictions
+    severity: medium
+    category: SNMP
+    type: python
+    function: junos_snmp_clients
+    description: >
+      Without 'clients', any host that knows the community string can query the
+      device.
+    remediation: |
+      set snmp community <COMMUNITY> clients <NMS-IP>/32
+      set snmp community <COMMUNITY> clients 0.0.0.0/0 restrict
+    references: [CIS Juniper OS Benchmark, NIST 800-53 AC-3]
+
+  - id: JUN-016
+    title: No remote syslog server configured
+    severity: low
+    category: Logging
+    type: line_present
+    pattern: '^set system syslog host \S+'
+    missing_message: No 'system syslog host' found.
+    description: >
+      Without a remote syslog server, logs cannot be used for incident
+      investigation.
+    remediation: |
+      set system syslog host <SYSLOG-IP> any info
+    references: [CIS Juniper OS Benchmark, NIST 800-53 AU-6]
+
+  - id: JUN-017
+    title: No NTP server configured
+    severity: low
+    category: Logging
+    type: line_present
+    pattern: '^set system ntp server \S+'
+    missing_message: No 'system ntp server' found.
+    description: >
+      Without NTP, log timestamps cannot be trusted or matched across devices.
+    remediation: |
+      set system ntp server <NTP-IP>
+    references: [NIST 800-53 AU-8]
+
+  - id: JUN-018
+    title: Security policy permits any source, destination and application
+    severity: high
+    category: Firewall Policy
+    type: python
+    function: junos_policy_any_any
+    description: >
+      An SRX policy matching any/any/any gives no real filtering between the
+      zones it connects.
+    remediation: |
+      set security policies from-zone <FROM> to-zone <TO> policy <NAME> match source-address <SRC>
+      set security policies from-zone <FROM> to-zone <TO> policy <NAME> match destination-address <DST>
+      set security policies from-zone <FROM> to-zone <TO> policy <NAME> match application <APP>
+    references: [NIST 800-53 AC-4, NIST 800-53 SC-7]
+
+  - id: JUN-019
+    title: Permit policy without session logging
+    severity: low
+    category: Logging
+    type: python
+    function: junos_policy_logging
+    description: >
+      Without session logging, you cannot investigate what traffic the policy
+      allowed.
+    remediation: |
+      set security policies from-zone <FROM> to-zone <TO> policy <NAME> then log session-close
+    references: [NIST 800-53 AU-2, NIST 800-53 AU-12]
+
+  - id: JUN-020
+    title: OSPF is running without authentication
+    severity: low
+    category: Routing
+    type: python
+    function: junos_ospf_auth
+    description: >
+      Without authentication, any device on the segment can form an OSPF
+      adjacency and inject false routes.
+    remediation: |
+      set protocols ospf area 0.0.0.0 interface <IFACE> authentication md5 1 key <KEY>
+    references: [NIST 800-53 SC-8]

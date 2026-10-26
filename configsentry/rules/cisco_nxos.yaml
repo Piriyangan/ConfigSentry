@@ -1,0 +1,255 @@
+# ConfigSentry rule pack - Cisco NX-OS (Nexus 3000 / 5000 / 7000 / 9000)
+# Input: "show running-config"
+
+platform: cisco_nxos
+name: Cisco NX-OS
+rules:
+
+  - id: NXOS-001
+    title: Telnet server feature is enabled
+    severity: high
+    category: Management Access
+    type: line_absent
+    pattern: '^feature telnet$'
+    description: >
+      Telnet sends usernames, passwords and commands in clear text.
+    remediation: |
+      no feature telnet
+    references: [NIST 800-53 SC-8, NIST 800-53 CM-7]
+
+  - id: NXOS-002
+    title: NX-API over clear-text HTTP is enabled
+    severity: medium
+    category: Management Access
+    type: line_absent
+    pattern: '^nxapi http port \d+'
+    description: >
+      NX-API over HTTP sends credentials and API calls in clear text. Use HTTPS
+      only.
+    remediation: |
+      no nxapi http
+      nxapi https port 443
+    references: [NIST 800-53 SC-8]
+
+  - id: NXOS-003
+    title: Password strength check is disabled
+    severity: medium
+    category: Passwords
+    type: line_absent
+    pattern: '^no password strength-check$'
+    description: >
+      Without the strength check, users can set short or simple passwords.
+    remediation: |
+      password strength-check
+    references: [NIST 800-53 IA-5]
+
+  - id: NXOS-004
+    title: Reversible type 7 keys found
+    severity: medium
+    category: Passwords
+    type: line_absent
+    scope: all
+    pattern: '\bkey 7 \S+'
+    description: >
+      Type 7 keys (TACACS+, RADIUS, routing) are only obfuscated and can be
+      decoded instantly. Use AES encryption for stored keys.
+    remediation: |
+      feature password encryption aes
+      key config-key ascii
+      encryption re-encrypt obfuscated
+    references: [NIST 800-53 IA-5]
+
+  - id: NXOS-005
+    title: No central AAA login (TACACS+/RADIUS)
+    severity: medium
+    category: AAA
+    type: line_present
+    pattern: '^aaa authentication login default group \S+'
+    missing_message: No 'aaa authentication login default group' found.
+    description: >
+      Without central AAA, admins share local accounts and actions are hard to
+      trace.
+    remediation: |
+      feature tacacs+
+      tacacs-server host <TACACS-IP> key <KEY>
+      aaa group server tacacs+ TACACS
+       server <TACACS-IP>
+      aaa authentication login default group TACACS
+      aaa accounting default group TACACS
+    references: [NIST 800-53 AC-2, NIST 800-53 AU-2]
+
+  - id: NXOS-006
+    title: VTY lines have no access-class
+    severity: medium
+    category: Management Access
+    type: block
+    parent: '^line vty$'
+    require: '^(ip )?access-class \S+ in$'
+    description: >
+      Without an access-class, SSH to the switch is open from any source
+      address. Restrict it to the management subnet.
+    remediation: |
+      ip access-list MGMT-ACL
+       permit ip <MGMT-SUBNET> any
+      line vty
+       access-class MGMT-ACL in
+    references: [NIST 800-53 AC-17]
+
+  - id: NXOS-007
+    title: VTY session timeout is not set
+    severity: medium
+    category: Management Access
+    type: block
+    parent: '^line vty$'
+    require: '^exec-timeout [1-9]\d*$'
+    description: >
+      By default NX-OS VTY sessions never time out. Set an idle timeout.
+    remediation: |
+      line vty
+       exec-timeout 10
+    references: [NIST 800-53 AC-12]
+
+  - id: NXOS-008
+    title: Console session timeout is not set
+    severity: low
+    category: Management Access
+    type: block
+    parent: '^line console$'
+    require: '^exec-timeout [1-9]\d*$'
+    description: >
+      By default the console session never times out.
+    remediation: |
+      line console
+       exec-timeout 10
+    references: [NIST 800-53 AC-12]
+
+  - id: NXOS-009
+    title: SSH RSA key shorter than 2048 bits
+    severity: medium
+    category: Cryptography
+    type: line_value
+    pattern: '^ssh key rsa (\d+)'
+    default: 1024
+    fail_if_less: 2048
+    description: >
+      Older NX-OS versions generate a 1024-bit RSA key by default, which is too
+      short.
+    remediation: |
+      no feature ssh
+      ssh key rsa 2048 force
+      feature ssh
+    references: [NIST 800-53 SC-13]
+
+  - id: NXOS-010
+    title: No login banner
+    severity: low
+    category: Management Access
+    type: line_present
+    pattern: '^banner motd\b'
+    missing_message: No 'banner motd' found.
+    description: >
+      A warning banner states that access is restricted and monitored.
+    remediation: |
+      banner motd #Authorised access only. All activity is monitored and logged.#
+    references: [NIST 800-53 AC-8]
+
+  - id: NXOS-011
+    title: Default SNMP community (public/private) in use
+    severity: high
+    category: SNMP
+    type: line_absent
+    pattern: '^snmp-server community (public|private) '
+    description: >
+      'public' and 'private' are the first communities every scanner tries.
+    remediation: |
+      no snmp-server community public
+      snmp-server user <USER> network-operator auth sha <AUTH-PASS> priv aes-128 <PRIV-PASS>
+    references: [NIST 800-53 IA-5]
+
+  - id: NXOS-012
+    title: SNMP read-write community configured
+    severity: high
+    category: SNMP
+    type: line_absent
+    pattern: '^snmp-server community \S+ (group network-admin|rw)\b'
+    description: >
+      A read-write community (group network-admin) lets anyone who knows it
+      change the configuration over SNMP.
+    remediation: |
+      no snmp-server community <COMMUNITY>
+      snmp-server community <COMMUNITY> group network-operator
+    references: [NIST 800-53 AC-6]
+
+  - id: NXOS-013
+    title: SNMP community without an ACL
+    severity: medium
+    category: SNMP
+    type: python
+    function: nxos_snmp_acl
+    description: >
+      Without 'use-ipv4acl', any host that knows the community string can query
+      the switch.
+    remediation: |
+      ip access-list SNMP-ACL
+       permit udp <NMS-IP>/32 any eq snmp
+      snmp-server community <COMMUNITY> use-ipv4acl SNMP-ACL
+    references: [NIST 800-53 AC-3]
+
+  - id: NXOS-014
+    title: No remote syslog server configured
+    severity: low
+    category: Logging
+    type: line_present
+    pattern: '^logging server \S+'
+    missing_message: No 'logging server' found.
+    description: >
+      Without a remote syslog server, logs cannot be used for incident
+      investigation after the buffer wraps or the switch reloads.
+    remediation: |
+      logging server <SYSLOG-IP> 6 use-vrf management
+    references: [NIST 800-53 AU-6, NIST 800-53 AU-9]
+
+  - id: NXOS-015
+    title: No NTP server configured
+    severity: low
+    category: Logging
+    type: line_present
+    pattern: '^ntp server \S+'
+    missing_message: No 'ntp server' found.
+    description: >
+      Without NTP, log timestamps cannot be trusted or matched across devices.
+    remediation: |
+      ntp server <NTP-IP> use-vrf management
+    references: [NIST 800-53 AU-8]
+
+  - id: NXOS-016
+    title: Edge ports without BPDU Guard
+    severity: medium
+    category: Layer 2
+    type: python
+    function: nxos_edge_bpduguard
+    description: >
+      Edge ports (spanning-tree port type edge) should never receive BPDUs.
+      Without BPDU Guard, a switch connected there can cause a loop.
+    remediation: |
+      spanning-tree port type edge bpduguard default
+      ! or per interface:
+      interface <EDGE-PORT>
+       spanning-tree bpduguard enable
+    references: [NIST 800-53 SC-5]
+
+  - id: NXOS-017
+    title: OSPF is running without authentication
+    severity: low
+    category: Routing
+    type: python
+    function: ios_ospf_authentication
+    description: >
+      Without authentication, any device on the segment can form an OSPF
+      adjacency and inject false routes.
+    remediation: |
+      router ospf <PROCESS>
+       area 0.0.0.0 authentication message-digest
+      interface <OSPF-INTERFACE>
+       ip ospf message-digest-key 1 md5 <KEY>
+    references: [NIST 800-53 SC-8]

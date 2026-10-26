@@ -1,0 +1,24 @@
+#
+# Configuration of LAB-CP-01
+# Language version: 15.0v1
+#
+# Exported by admin on Sat Oct 24 10:00:00 2026
+# FAKE SAMPLE CONFIG FOR TESTING CONFIGSENTRY - NOT FROM A REAL DEVICE
+#
+set hostname LAB-CP-01
+set net-access telnet on
+add allowed-client host any-host
+set inactivity-timeout 60
+set web session-timeout 720
+set password-controls min-password-length 6
+set password-controls complexity 1
+set password-controls history-checking off
+set password-controls password-expiration never
+set password-controls deny-on-fail enable off
+set snmp agent on
+set snmp agent-version any
+add snmp community public read-only
+add snmp community LabWrite read-write
+set user admin shell /bin/bash
+set user admin password-hash $1$FAKEFAKE$FAKEFAKEFAKEFAKEFAKE
+set expert-password-hash $1$FAKEFAKE$FAKEFAKEFAKEFAKEFAKE

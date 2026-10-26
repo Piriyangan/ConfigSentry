@@ -1,0 +1,40 @@
+!Command: show running-config
+!Running configuration last done at: Sat Oct 24 10:00:00 2026
+! FAKE SAMPLE CONFIG FOR TESTING CONFIGSENTRY - NOT FROM A REAL DEVICE
+version 9.3(8) Bios:version 05.45
+hostname LAB-N9K-01
+feature telnet
+feature nxapi
+feature ospf
+feature interface-vlan
+
+no password strength-check
+username admin password 5 $5$FAKEFAKE$FAKEFAKEFAKEFAKEFAKEFAKE role network-admin
+tacacs-server host 192.0.2.40 key 7 "FAKEKEY"
+nxapi http port 80
+
+snmp-server community public group network-operator
+snmp-server community LabWrite group network-admin
+
+interface Ethernet1/1
+  description SERVER-01
+  switchport
+  switchport access vlan 10
+  spanning-tree port type edge
+  no shutdown
+
+interface Ethernet1/48
+  description UPLINK
+  switchport
+  switchport mode trunk
+  channel-group 10 mode active
+  no shutdown
+
+interface port-channel10
+  switchport mode trunk
+
+router ospf UNDERLAY
+  router-id 192.0.2.1
+
+line console
+line vty
